@@ -20,6 +20,7 @@ output/
 *.png
 *.jpg
 *.jpeg
+!assets/h3-lite-hero.png
 *.safetensors
 *.ckpt
 *.pt
