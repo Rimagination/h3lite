@@ -1,9 +1,7 @@
 # H3 Lite
 
 <p align="center">
-  <video controls autoplay loop muted playsinline width="100%" poster="assets/h3-lite-hero-poster.png" aria-label="H3 Lite — MiniMax H3 skill for ComfyUI local deployment">
-    <source src="https://raw.githubusercontent.com/Rimagination/h3lite/main/assets/h3-lite-hero.mp4" type="video/mp4">
-  </video>
+  <img src="assets/h3-lite-hero.gif" alt="H3 Lite — MiniMax H3 skill for ComfyUI local deployment" width="100%">
 </p>
 
 <p align="center">

@@ -23,6 +23,7 @@ output/
 !assets/h3-lite-hero.png
 !assets/h3-lite-hero.mp4
 !assets/h3-lite-hero-poster.png
+!assets/h3-lite-hero.gif
 *.safetensors
 *.ckpt
 *.pt
