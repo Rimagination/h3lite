@@ -21,6 +21,8 @@ output/
 *.jpg
 *.jpeg
 !assets/h3-lite-hero.png
+!assets/h3-lite-hero.mp4
+!assets/h3-lite-hero-poster.png
 *.safetensors
 *.ckpt
 *.pt
