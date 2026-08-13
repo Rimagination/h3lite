@@ -1,0 +1,27 @@
+{
+  "source_repository": "https://github.com/MiniMax-AI/MiniMax-H3",
+  "source_section": "https://github.com/MiniMax-AI/MiniMax-H3#reproducible-768p-cases",
+  "assets": [
+    {
+      "file": "minimax-official-i2va-ramen-first-frame.png",
+      "role": "first_frame",
+      "source_script": "https://github.com/MiniMax-AI/MiniMax-H3/blob/main/scripts/readme/full-2k-i2va-h3-context-ir.sh",
+      "source_url": "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/H3_AA_I2VA/gallery/sr_v17_variants_seed42_43_20260724/inputs/4a3a90bf9100_KDmcbkhzYo5sjjxr9FqcVmWVnzb.png",
+      "sha256": "352e959e08b886406d3766cee25ebe7bbf679e6d53eeffbd1c607b8dc93e2068"
+    },
+    {
+      "file": "minimax-official-ref2va-pink-suit-black-lamb.mp4",
+      "role": "reference_video_with_original_audio",
+      "source_script": "https://github.com/MiniMax-AI/MiniMax-H3/blob/main/scripts/readme/full-2k-ref2va-h3-context-ir.sh",
+      "source_url": "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/h3_promo_eval_ref2va/gallery/sr_v2p26_trio_seed42_20260724/inputs/297573323635_00_%E8%A7%86%E9%A2%911_YnyRbxEwio_video_20260525_163755_1927e9d3.mp4",
+      "sha256": "d6edc20ac82aa980c9cbd0b05b371f60d12dc8d018492e571b42de0086819c41"
+    },
+    {
+      "file": "minimax-official-ref2va-voice-reference.mp3",
+      "role": "reference_audio_for_voice_timbre",
+      "source_script": "https://github.com/MiniMax-AI/MiniMax-H3/blob/main/scripts/readme/full-2k-ref2va-h3-context-ir.sh",
+      "source_url": "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/h3_promo_eval_ref2va/gallery/sr_v2p26_trio_seed42_20260724/inputs/f463d523c5ce_01_%E9%9F%B3%E9%A2%911_RSLcbpzJPo_6%E6%9C%885%E6%97%A5(1).mp3",
+      "sha256": "2a48d447b343b38a2c504d5281a0c97c688db0ba87931ed9282c598bd6752454"
+    }
+  ]
+}

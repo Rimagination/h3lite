@@ -1,0 +1,107 @@
+{
+  "4": {
+    "inputs": {"vae_name": "minimax_h3_video_vae_fp16.safetensors"},
+    "class_type": "VAELoader"
+  },
+  "15": {
+    "inputs": {
+      "format": "auto",
+      "codec": "auto",
+      "filename_prefix": "video/H3Lite",
+      "video": ["14", 0]
+    },
+    "class_type": "SaveVideo"
+  },
+  "7": {
+    "inputs": {"model": ["105:201", 0], "conditioning": ["6", 0]},
+    "class_type": "BasicGuider"
+  },
+  "10": {
+    "inputs": {"noise_seed": 0},
+    "class_type": "RandomNoise"
+  },
+  "12": {
+    "inputs": {"samples": ["11", 0], "vae": ["4", 0]},
+    "class_type": "VAEDecode"
+  },
+  "8": {
+    "inputs": {"sampler_name": "res_multistep"},
+    "class_type": "KSamplerSelect"
+  },
+  "3": {
+    "inputs": {"shift_video": 12.0, "shift_audio": 3.0, "model": ["2", 0]},
+    "class_type": "MiniMaxH3SigmaShift"
+  },
+  "1": {
+    "inputs": {
+      "mode": "dynamic",
+      "projection": "mmh3-4b-ClipProj-celeb-mlp.safetensors",
+      "device": "cuda:0",
+      "clip_name": "qwen3vl_4b_int4_convrot.safetensors",
+      "type": "krea2"
+    },
+    "class_type": "ClipProjLoader"
+  },
+  "5": {
+    "inputs": {"vae_name": "minimax_h3_audio_vae_fp32.safetensors"},
+    "class_type": "VAELoader"
+  },
+  "14": {
+    "inputs": {
+      "images": ["12", 0],
+      "audio": ["13", 0],
+      "bit_depth": 8,
+      "fps": 24.0
+    },
+    "class_type": "CreateVideo"
+  },
+  "2": {
+    "inputs": {
+      "weight_dtype": "default",
+      "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors"
+    },
+    "class_type": "UNETLoader"
+  },
+  "6": {
+    "inputs": {
+      "clip": ["1", 0],
+      "width": 640,
+      "prompt": "__H3_PROMPT__",
+      "vae": ["4", 0],
+      "length": 124,
+      "height": 352
+    },
+    "class_type": "MiniMaxH3ImageToVideo"
+  },
+  "105:201": {
+    "inputs": {
+      "strength_model": 1.0,
+      "model": ["3", 0],
+      "lora_name": "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors"
+    },
+    "class_type": "LoraLoaderModelOnly"
+  },
+  "13": {
+    "inputs": {"samples": ["11", 0], "vae": ["5", 0]},
+    "class_type": "VAEDecodeAudio"
+  },
+  "11": {
+    "inputs": {
+      "sigmas": ["9", 0],
+      "guider": ["7", 0],
+      "noise": ["10", 0],
+      "sampler": ["8", 0],
+      "latent_image": ["6", 1]
+    },
+    "class_type": "SamplerCustomAdvanced"
+  },
+  "9": {
+    "inputs": {
+      "scheduler": "simple",
+      "model": ["105:201", 0],
+      "steps": 4,
+      "denoise": 1.0
+    },
+    "class_type": "BasicScheduler"
+  }
+}

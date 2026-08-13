@@ -19,7 +19,10 @@ import re
 import shutil
 import subprocess
 import sys
+import hashlib
 from typing import Any, Iterable
+
+from h3_paths import normalize_windows_path
 
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -159,11 +162,17 @@ def candidate_python_paths(comfyui: Path | None) -> list[Path]:
             [
                 comfyui / "venv" / "Scripts" / "python.exe",
                 comfyui / ".venv" / "Scripts" / "python.exe",
+                comfyui / "python_embeded" / "python.exe",
+                comfyui.parent / "python_embeded" / "python.exe",
                 comfyui / "venv" / "bin" / "python",
                 comfyui / ".venv" / "bin" / "python",
             ]
         )
-    paths.append(Path(sys.executable))
+    # Probe the interpreter that actually owns ComfyUI. A system Python which
+    # cannot import ComfyUI-only packages is not evidence that the running
+    # installation is broken.
+    if not any(path.exists() for path in paths):
+        paths.append(Path(sys.executable))
     unique: list[Path] = []
     seen: set[str] = set()
     for path in paths:
@@ -179,6 +188,8 @@ def python_probe(path: Path) -> dict[str, Any]:
         "import json,sys; r={'python':sys.version.split()[0]}; "
         "\ntry:\n import torch\n r.update({'torch':torch.__version__,'cuda_available':bool(torch.cuda.is_available()),'torch_cuda':torch.version.cuda})\n "
         "\nexcept Exception as e: r.update({'torch_error':type(e).__name__+': '+str(e)})\n"
+        "\ntry:\n import comfy_kitchen\n r.update({'comfy_kitchen':getattr(comfy_kitchen,'__version__','unknown'),'comfy_kitchen_path':getattr(comfy_kitchen,'__file__',None)})\n "
+        "\nexcept Exception as e: r.update({'comfy_kitchen_error':type(e).__name__+': '+str(e)})\n"
         "print(json.dumps(r, ensure_ascii=False))"
     )
     return_code, stdout, stderr = run_command([str(path), "-c", code], timeout=30)
@@ -227,9 +238,9 @@ MODEL_MANIFEST: dict[str, dict[str, Any]] = {
         "patterns": [r"minimax_h3.*int8.*\.safetensors$"],
     },
     "low_vram_text_encoder": {
-        "role": "Qwen3-VL 4B INT4 text encoder",
+        "role": "Qwen3-VL 4B low-VRAM text encoder",
         "folders": ["models/text_encoders", "models/text_encoder"],
-        "patterns": [r"qwen3vl.*4b.*(int4|4bit).*\.safetensors$"],
+        "patterns": [r"qwen3vl.*4b.*(int4|4bit|fp8).*\.safetensors$"],
     },
     "native_text_encoder": {
         "role": "Qwen3-VL 32B native text encoder",
@@ -252,9 +263,9 @@ MODEL_MANIFEST: dict[str, dict[str, Any]] = {
         "patterns": [r".*clipproj.*\.safetensors$"],
     },
     "lightx2v_lora": {
-        "role": "4-step LightX2V LoRA",
+        "role": "4-step H3 Turbo/LightX2V LoRA",
         "folders": ["models/loras", "models/lora"],
-        "patterns": [r".*lightx2v.*\.safetensors$"],
+        "patterns": [r".*lightx2v.*\.safetensors$", r"minimax_h3.*turbo.*step.*\.safetensors$"],
     },
 }
 
@@ -325,6 +336,52 @@ def node_report(comfyui: Path | None) -> dict[str, Any]:
     return {"available": True, "root": str(node_dir), "installed": sorted(installed), "nodes": nodes}
 
 
+def environment_fingerprint(report: dict[str, Any], comfyui: Path | None) -> str:
+    """Fingerprint cheap-to-check environment identity for cache reuse."""
+    entries: list[str] = []
+    for gpu in report.get("gpus", []):
+        if isinstance(gpu, dict):
+            entries.append(f"gpu:{gpu.get('name')}:{gpu.get('vram_total_gb')}:{gpu.get('driver_version')}")
+    if comfyui:
+        main_py = comfyui / "main.py"
+        try:
+            stat = main_py.stat()
+            entries.append(f"comfyui:{comfyui.resolve()}:{stat.st_size}:{stat.st_mtime_ns}")
+        except OSError:
+            entries.append(f"comfyui:{comfyui.resolve()}:missing")
+    models = report.get("models", {}).get("assets", {}) if isinstance(report.get("models"), dict) else {}
+    for asset in models.values():
+        if not isinstance(asset, dict):
+            continue
+        for found in asset.get("found", []):
+            if not isinstance(found, dict):
+                continue
+            path = Path(str(found.get("path", "")))
+            try:
+                stat = path.stat()
+                entries.append(f"model:{path.resolve()}:{stat.st_size}:{stat.st_mtime_ns}")
+            except OSError:
+                entries.append(f"model:{path}:missing")
+    nodes = report.get("custom_nodes", {}).get("installed", []) if isinstance(report.get("custom_nodes"), dict) else []
+    entries.extend(f"node:{name}" for name in nodes)
+    return hashlib.sha256("\n".join(sorted(entries)).encode("utf-8")).hexdigest()
+
+
+def runtime_compatibility(report: dict[str, Any]) -> dict[str, Any]:
+    """Expose import failures before a large model download or generation."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    for probe in report.get("python_probes", []):
+        if not isinstance(probe, dict):
+            continue
+        if probe.get("torch_error"):
+            errors.append(f"Torch import failed in {probe.get('path')}: {probe['torch_error']}")
+        if probe.get("comfy_kitchen_error"):
+            message = f"comfy-kitchen import failed in {probe.get('path')}: {probe['comfy_kitchen_error']}"
+            errors.append(message + "; repair the ComfyUI/comfy-kitchen/Torch/extension ABI set before using W4A8")
+    return {"status": "error" if errors else ("caution" if warnings else "ready"), "errors": errors, "warnings": warnings}
+
+
 def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dict[str, Any]) -> dict[str, Any]:
     usable_vram = max(
         (gpu.get("vram_total_gb") or 0 for gpu in gpus if isinstance(gpu, dict) and gpu.get("vram_total_gb") is not None),
@@ -332,27 +389,38 @@ def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dic
     )
     ram = memory.get("total_gb") or 0
     free_disk = disk.get("free_gb") or 0
-    reasons: list[str] = []
     if usable_vram <= 0:
         return {"name": "no-nvidia-cuda", "confidence": "high", "reasons": ["No NVIDIA GPU was reported by nvidia-smi."]}
-    if usable_vram < 7.5:
-        reasons.append(f"reported VRAM is only {usable_vram:.2f} GB")
+    blockers: list[str] = []
+    if usable_vram < 5.5:
+        blockers.append(f"reported VRAM is only {usable_vram:.2f} GB")
     if ram and ram < 24:
-        reasons.append(f"system RAM is {ram:.2f} GB")
+        blockers.append(f"system RAM is {ram:.2f} GB")
     if free_disk and free_disk < 35:
-        reasons.append(f"free disk is {free_disk:.2f} GB")
-    if reasons:
-        return {"name": "blocked-or-alternative", "confidence": "medium", "reasons": reasons}
+        blockers.append(f"free disk is {free_disk:.2f} GB")
+    if blockers:
+        return {"name": "blocked-or-alternative", "confidence": "medium", "reasons": blockers}
+    if usable_vram < 7.5:
+        reasons = [
+            "6 GB-class H3 runs have been reported with aggressive system-RAM offload; treat this as experimental, not the validated W4A8 baseline.",
+            "Start at 608x352 with 4 steps and expect long, hardware-dependent wall time.",
+        ]
+        if ram and ram < 31:
+            reasons.append(f"Only {ram:.2f} GB system RAM was reported; 32 GB is the community-tested 6 GB reference point.")
+        return {"name": "experimental-6gb", "confidence": "low", "reasons": reasons}
     if usable_vram < 10:
         return {"name": "low-vram-w4a8", "confidence": "high", "reasons": ["Use the tested W4A8/4B/4-step profile first."]}
     if usable_vram < 16:
         return {"name": "w4a8-mid", "confidence": "medium", "reasons": ["Keep W4A8 as the reproducible baseline; scale only after a smoke test."]}
-    return {"name": "native-int8", "confidence": "medium", "reasons": ["The machine may fit the native route; verify the official workflow and kernels empirically."]}
+    reasons = ["Use a validated W4A8 component set first; 16 GB VRAM alone does not prove that the native route fits system RAM or its quantized kernels."]
+    if ram and ram < 48:
+        reasons.append(f"System RAM is {ram:.2f} GB, so keep the native INT8/32B route opt-in until a short official-workflow smoke test passes.")
+    return {"name": "w4a8-high", "confidence": "high", "reasons": reasons}
 
 
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
-    root = Path(args.root).expanduser().resolve() if args.root else Path.cwd().resolve()
-    comfyui = Path(args.comfyui).expanduser().resolve() if args.comfyui else None
+    root = normalize_windows_path(args.root).resolve() if args.root else Path.cwd().resolve()
+    comfyui = normalize_windows_path(args.comfyui).resolve() if args.comfyui else None
     if comfyui is None:
         for candidate in (root / "ComfyUI", root / "comfyui", root):
             if (candidate / "main.py").exists() and (candidate / "models").exists():
@@ -380,6 +448,8 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "custom_nodes": {} if args.no_node_scan else node_report(comfyui),
     }
     report["recommendation"] = choose_profile(gpus, memory, disk)
+    report["environment_fingerprint"] = environment_fingerprint(report, comfyui)
+    report["runtime_compatibility"] = runtime_compatibility(report)
     return report
 
 
@@ -433,7 +503,9 @@ def main() -> int:
     if args.report_file:
         report_path = Path(args.report_file).expanduser().resolve()
         report_path.parent.mkdir(parents=True, exist_ok=True)
-        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary = report_path.with_name(report_path.name + ".tmp")
+        temporary.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        temporary.replace(report_path)
     if args.json:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:

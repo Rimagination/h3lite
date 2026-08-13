@@ -98,6 +98,16 @@ Use this order when rewriting a casual idea:
 
 Do not add random cinematic adjectives that do not change what the model should render. Prefer observable, testable descriptions: who moves, where, when, how fast, what the camera sees, and what the audience hears.
 
+Do not add a Stable Diffusion-style negative prompt: the native
+`MiniMaxH3ImageToVideo` T2VA node exposes one prompt input, not a separate
+negative input. Put essential exclusions such as no dialogue, no subtitles, or
+no readable text into the main description.
+
+For strict Minecraft-like geometry, prefer explicit English such as `blocky
+voxel Minecraft scene`; a vague translation of “pixel style” can drift toward
+generic low-poly imagery. Give every visible character an observable state or
+action. Strong static wording can suppress motion beyond the intended subject.
+
 ## Minimal examples
 
 ### T2VA

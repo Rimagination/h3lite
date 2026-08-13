@@ -50,23 +50,21 @@ def _external_gpu_processes(processes: list[dict[str, Any]]) -> list[dict[str, A
 
 def _append_missing_asset_checks(report: dict[str, Any], errors: list[str], warnings: list[str], require_audio: bool) -> None:
     models = report.get("models")
-    if not isinstance(models, dict) or not models.get("available"):
-        return
-    assets = models.get("assets")
-    if not isinstance(assets, dict) or not assets:
-        return
-    required = {
-        "low_vram_diffusion",
-        "low_vram_text_encoder",
-        "video_vae_fp16",
-        "clipproj",
-        "lightx2v_lora",
-    }
-    if require_audio:
-        required.add("audio_vae_fp32")
-    missing = [key for key in sorted(required) if key in assets and assets[key].get("present") is False]
-    if missing:
-        errors.append("missing required model roles: " + ", ".join(missing))
+    if isinstance(models, dict) and models.get("available"):
+        assets = models.get("assets")
+        if isinstance(assets, dict) and assets:
+            required = {
+                "low_vram_diffusion",
+                "low_vram_text_encoder",
+                "video_vae_fp16",
+                "clipproj",
+                "lightx2v_lora",
+            }
+            if require_audio:
+                required.add("audio_vae_fp32")
+            missing = [key for key in sorted(required) if key in assets and assets[key].get("present") is False]
+            if missing:
+                errors.append("missing required model roles: " + ", ".join(missing))
 
     nodes = report.get("custom_nodes")
     if not isinstance(nodes, dict) or not nodes.get("available"):
@@ -74,10 +72,17 @@ def _append_missing_asset_checks(report: dict[str, Any], errors: list[str], warn
     node_map = nodes.get("nodes")
     if not isinstance(node_map, dict) or not node_map:
         return
-    required_nodes = {"kj_nodes", "clipproj_node", "h3_turbo", "sol_attention", "block_cache"}
+    # The compatibility workflow only requires ClipProj. Attention and block
+    # cache nodes are optional accelerators and must never block a baseline run.
+    required_nodes = {"clipproj_node"}
     missing_nodes = [key for key in sorted(required_nodes) if key in node_map and node_map[key].get("present") is False]
     if missing_nodes:
         errors.append("missing required custom-node roles: " + ", ".join(missing_nodes))
+
+    optional_nodes = {"kj_nodes", "h3_turbo", "sol_attention", "block_cache"}
+    unavailable_optional = [key for key in sorted(optional_nodes) if key in node_map and node_map[key].get("present") is False]
+    if unavailable_optional:
+        warnings.append("optional acceleration node roles unavailable: " + ", ".join(unavailable_optional) + "; use the compatibility workflow")
 
 
 def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = None, *, require_audio: bool = True) -> dict[str, Any]:
@@ -102,8 +107,10 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
     free_vram = _max_value(gpus, "vram_free_gb")
     checks["vram_total_gb"] = total_vram
     checks["vram_free_gb"] = free_vram
-    if total_vram is None or total_vram < 7.5:
-        errors.append("reported VRAM is below the tested 8 GB minimum")
+    if total_vram is None or total_vram < 5.5:
+        errors.append("reported VRAM is below the experimental 6 GB floor")
+    elif total_vram < 7.5:
+        warnings.append("6 GB-class VRAM is an experimental route; use 608x352, 4 steps, low-VRAM offload, and a generous time budget")
     elif free_vram is not None and free_vram < 0.5:
         errors.append(f"currently free VRAM is only {free_vram:.2f} GB")
     elif free_vram is not None and free_vram < 1.5:
@@ -120,6 +127,8 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
     })
     if total_ram is not None and total_ram < 24:
         errors.append(f"system RAM is only {total_ram:.1f} GB; the tested route expects at least 24 GB")
+    elif total_vram is not None and total_vram < 7.5 and total_ram is not None and total_ram < 31:
+        errors.append(f"6 GB-class VRAM needs about 32 GB system RAM for the community-tested offload route; only {total_ram:.1f} GB was reported")
     if available_ram is not None and available_ram < 2:
         errors.append(f"currently available RAM is only {available_ram:.2f} GB")
     elif available_ram is not None and available_ram < 6:
@@ -147,6 +156,10 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
             )
 
     _append_missing_asset_checks(report, errors, warnings, require_audio)
+
+    compatibility = report.get("runtime_compatibility") if isinstance(report.get("runtime_compatibility"), dict) else {}
+    errors.extend(str(item) for item in compatibility.get("errors", []) if item)
+    warnings.extend(str(item) for item in compatibility.get("warnings", []) if item)
 
     if plan and isinstance(plan.get("warnings"), list):
         plan_warnings = [str(item) for item in plan["warnings"]]

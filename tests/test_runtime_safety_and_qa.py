@@ -12,6 +12,69 @@ sys.path.insert(0, str(SCRIPTS))
 
 
 class RuntimeSafetyTests(unittest.TestCase):
+    def test_fp8_4b_encoder_is_a_valid_low_vram_role(self):
+        from h3_doctor import model_report
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            encoder_dir = root / "models" / "text_encoders"
+            encoder_dir.mkdir(parents=True)
+            (encoder_dir / "qwen3vl_4b_fp8_scaled.safetensors").write_bytes(b"test")
+            report = model_report(root)
+
+        self.assertTrue(report["assets"]["low_vram_text_encoder"]["present"])
+
+    def test_optional_acceleration_nodes_do_not_block_compatibility_workflow(self):
+        from h3_preflight import assess_runtime_risk
+
+        report = {
+            "gpus": [{"name": "RTX 4060 Ti", "vram_total_gb": 16.0, "vram_free_gb": 8.0}],
+            "system_memory": {"total_gb": 32.0, "available_gb": 16.0, "page_file_available_gb": 16.0},
+            "disk": {"free_gb": 100.0},
+            "recommendation": {"name": "w4a8-high"},
+            "models": {"available": True, "assets": {}},
+            "custom_nodes": {"available": True, "nodes": {
+                "clipproj_node": {"present": True},
+                "sol_attention": {"present": False},
+                "block_cache": {"present": False},
+            }},
+        }
+
+        result = assess_runtime_risk(report)
+
+        self.assertNotEqual(result["status"], "blocked")
+        self.assertTrue(any("compatibility workflow" in item for item in result["warnings"]))
+
+    def test_16gb_with_32gb_ram_starts_from_w4a8(self):
+        from h3_doctor import choose_profile
+
+        result = choose_profile(
+            [{"name": "RTX 4060 Ti", "vram_total_gb": 16.0}],
+            {"total_gb": 32.0},
+            {"free_gb": 100.0},
+        )
+
+        self.assertEqual(result["name"], "w4a8-high")
+
+    def test_6gb_with_32gb_ram_is_caution_not_blocked(self):
+        from h3_preflight import assess_runtime_risk
+
+        report = {
+            "gpus": [{"name": "RTX 3060 Laptop GPU", "vram_total_gb": 6.0, "vram_free_gb": 2.0}],
+            "system_memory": {
+                "total_gb": 32.0,
+                "available_gb": 12.0,
+                "page_file_available_gb": 16.0,
+            },
+            "disk": {"free_gb": 100.0},
+            "recommendation": {"name": "experimental-6gb"},
+        }
+
+        result = assess_runtime_risk(report)
+
+        self.assertEqual(result["status"], "caution")
+        self.assertTrue(any("experimental" in item for item in result["warnings"]))
+
     def test_low_available_memory_is_a_warning_not_an_automatic_block(self):
         from h3_preflight import assess_runtime_risk
 
@@ -154,6 +217,46 @@ class SubmissionContractTests(unittest.TestCase):
             release_submission_claim(claim)
             self.assertIsNotNone(acquire_submission_claim(root, "fingerprint"))
 
+    def test_model_resolution_switches_only_as_a_complete_registered_set(self):
+        from h3_generate import resolve_model_overrides
+
+        workflow = {
+            "unet": {"inputs": {"unet_name": "missing-a.safetensors"}},
+            "clip": {"inputs": {"clip_name": "missing-b.safetensors"}},
+            "lora": {"inputs": {"lora_name": "missing-c.safetensors"}},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_dir = root / "models"
+            model_dir.mkdir()
+            names = (
+                "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
+                "qwen3vl_4b_fp8_scaled.safetensors",
+                "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors",
+            )
+            for name in names:
+                (model_dir / name).write_bytes(b"test")
+            overrides = resolve_model_overrides(workflow, root)
+
+        self.assertEqual(overrides["component_set"], "portable-16gb-b")
+        self.assertEqual(workflow["clip"]["inputs"]["clip_name"], names[1])
+
+    def test_partial_component_set_is_rejected(self):
+        from h3_generate import resolve_model_overrides
+
+        workflow = {
+            "unet": {"inputs": {"unet_name": "missing-a.safetensors"}},
+            "clip": {"inputs": {"clip_name": "missing-b.safetensors"}},
+            "lora": {"inputs": {"lora_name": "missing-c.safetensors"}},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_dir = root / "models"
+            model_dir.mkdir()
+            (model_dir / "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors").write_bytes(b"test")
+            with self.assertRaisesRegex(RuntimeError, "no complete registered component set"):
+                resolve_model_overrides(workflow, root)
+
     def test_media_verification_checks_duration_frames_fps_and_audio(self):
         from h3_generate import verify_outputs
 
@@ -246,6 +349,53 @@ class DynamicQualityTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertFalse(result["complete"])
         self.assertNotIn("history", result)
+
+
+class FastPathContractTests(unittest.TestCase):
+    def test_auto_workflow_falls_back_without_optional_nodes(self):
+        from h3_fastpath import select_workflow_template
+
+        doctor = {"custom_nodes": {"nodes": {"sol_attention": {"present": False}, "block_cache": {"present": False}}}}
+        self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v_compat")
+        doctor["custom_nodes"]["nodes"]["sol_attention"]["present"] = True
+        doctor["custom_nodes"]["nodes"]["block_cache"]["present"] = True
+        self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v")
+
+    def test_fresh_environment_cache_is_reused_but_stale_cache_requires_doctor(self):
+        from h3_fastpath import cache_is_fresh, cache_policy
+
+        with tempfile.TemporaryDirectory() as directory:
+            cache = Path(directory) / "doctor.json"
+            cache.write_text('{"recommendation":{"name":"low-vram-w4a8"}}', encoding="utf-8")
+            now = cache.stat().st_mtime
+
+            self.assertTrue(cache_is_fresh(cache, now=now + 60, max_age_seconds=1800))
+            self.assertEqual(cache_policy(cache, now=now + 60), "reuse")
+            self.assertFalse(cache_is_fresh(cache, now=now + 1801, max_age_seconds=1800))
+            self.assertEqual(cache_policy(cache, now=now + 1801), "doctor")
+
+    def test_status_command_is_one_bounded_watch_instead_of_repeated_one_shot_polls(self):
+        from h3_fastpath import build_status_command
+
+        command = build_status_command(
+            scripts_dir=SCRIPTS,
+            base_url="http://127.0.0.1:8188",
+            prompt_id="prompt-123",
+            output_dir=Path("F:/MiniMax-H3/ComfyUI/output"),
+            run_root=Path("F:/MiniMax-H3/ComfyUI/user/h3lite_runs"),
+        )
+        self.assertEqual(command.count("--watch"), 1)
+        self.assertIn("--watch-interval", command)
+        self.assertIn("20", command)
+        self.assertIn("--watch-timeout", command)
+        self.assertIn("3600", command)
+        self.assertNotIn("--verbose", command)
+
+    def test_skill_documents_the_single_entry_hot_path(self):
+        skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("h3_fastpath.py", skill)
+        self.assertIn("Do not issue repeated one-shot status calls", skill)
 
 
 if __name__ == "__main__":
