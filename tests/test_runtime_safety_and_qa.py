@@ -1,8 +1,10 @@
 import copy
+import hashlib
 import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -257,6 +259,59 @@ class SubmissionContractTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "no complete registered component set"):
                 resolve_model_overrides(workflow, root)
 
+    def test_component_integrity_is_hashed_once_then_cached(self):
+        import h3_generate
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_dir = root / "models"
+            model_dir.mkdir()
+            payloads = {"a.safetensors": b"alpha", "b.safetensors": b"beta"}
+            requirements = {
+                name: {"bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+                for name, payload in payloads.items()
+            }
+            for name, payload in payloads.items():
+                (model_dir / name).write_bytes(payload)
+            with patch.dict(h3_generate.COMPONENT_INTEGRITY, {"test-set": requirements}, clear=False):
+                first = h3_generate.verify_component_integrity(root, "test-set")
+                second = h3_generate.verify_component_integrity(root, "test-set")
+
+        self.assertTrue(first["verified"])
+        self.assertTrue(all(not item["cache_reused"] for item in first["files"]))
+        self.assertTrue(all(item["cache_reused"] for item in second["files"]))
+
+    def test_explicit_component_set_wins_when_multiple_sets_are_installed(self):
+        from h3_generate import resolve_model_overrides
+
+        workflow = {
+            "unet": {"inputs": {"unet_name": "missing-a.safetensors"}},
+            "clip": {"inputs": {"clip_name": "missing-b.safetensors"}},
+            "lora": {"inputs": {"lora_name": "missing-c.safetensors"}},
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            model_dir = root / "models"
+            model_dir.mkdir(parents=True)
+            names = (
+                "minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors",
+                "qwen3vl_4b_int4_convrot.safetensors",
+                "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors",
+                "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
+                "qwen3vl_4b_fp8_scaled.safetensors",
+                "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors",
+            )
+            for name in names:
+                (model_dir / name).write_bytes(b"test")
+
+            with self.assertRaisesRegex(RuntimeError, "multiple registered component sets"):
+                resolve_model_overrides(workflow, root)
+
+            overrides = resolve_model_overrides(workflow, root, "B")
+
+        self.assertEqual(overrides["component_set"], "portable-16gb-b")
+        self.assertEqual(workflow["unet"]["inputs"]["unet_name"], names[3])
+
     def test_media_verification_checks_duration_frames_fps_and_audio(self):
         from h3_generate import verify_outputs
 
@@ -333,6 +388,26 @@ class DynamicQualityTests(unittest.TestCase):
         self.assertEqual(analyze_frame_samples(static)["classification"], "static_or_nearly_static")
         self.assertEqual(analyze_frame_samples(motion)["classification"], "dynamic")
 
+    def test_rgb_qa_rejects_colored_mosaic_but_accepts_coherent_frames(self):
+        from h3_status import analyze_rgb_frame_samples
+
+        size = 8
+        mosaic = []
+        colors = ((255, 0, 255), (0, 255, 0), (0, 0, 0), (255, 255, 255))
+        for y in range(size):
+            for x in range(size):
+                mosaic.extend(colors[(x + y) % len(colors)])
+        coherent = bytes([120, 130, 125]) * (size * size)
+
+        self.assertEqual(
+            analyze_rgb_frame_samples([bytes(mosaic)] * 3, size=size)["classification"],
+            "suspected_mosaic",
+        )
+        self.assertEqual(
+            analyze_rgb_frame_samples([coherent] * 3, size=size)["classification"],
+            "coherent_color",
+        )
+
     def test_pending_status_is_not_ok_and_compact_status_drops_history(self):
         from h3_status import compact_result
 
@@ -352,6 +427,12 @@ class DynamicQualityTests(unittest.TestCase):
 
 
 class FastPathContractTests(unittest.TestCase):
+    def test_fastpath_uses_h3_route_labels_for_planner(self):
+        from h3_fastpath import REFERENCE_MODE_LABELS
+
+        self.assertEqual(REFERENCE_MODE_LABELS["t2v"], "T2VA")
+        self.assertEqual(REFERENCE_MODE_LABELS["i2va"], "I2VA")
+
     def test_auto_workflow_falls_back_without_optional_nodes(self):
         from h3_fastpath import select_workflow_template
 
@@ -359,7 +440,65 @@ class FastPathContractTests(unittest.TestCase):
         self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v_compat")
         doctor["custom_nodes"]["nodes"]["sol_attention"]["present"] = True
         doctor["custom_nodes"]["nodes"]["block_cache"]["present"] = True
+        doctor["custom_nodes"]["nodes"]["h3_turbo"] = {"present": True}
+        doctor["custom_nodes"]["nodes"]["sage_attention"] = {"present": True}
         self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v")
+
+    def test_loaded_object_info_controls_accelerated_route(self):
+        from h3_fastpath import select_workflow_template
+
+        classes = {
+            "MiniMaxH3MemoryEfficientSolAttentionPatch": {},
+            "MiniMaxH3MemoryEfficientSageAttentionPatch": {},
+            "MiniMaxH3ChunkFeedForward": {},
+            "MiniMaxH3BlockCacheT8": {},
+        }
+        doctor = {"runtime_capabilities": {"object_info": classes}}
+        self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v")
+        del classes["MiniMaxH3BlockCacheT8"]
+        self.assertEqual(select_workflow_template("auto", doctor), "h3_w4a8_t2v_compat")
+        self.assertEqual(
+            select_workflow_template("auto", {"runtime_capabilities": {"object_info": None}}),
+            "h3_w4a8_t2v_compat",
+        )
+
+    def test_set_b_auto_uses_compatibility_route(self):
+        from h3_fastpath import select_workflow_template
+
+        classes = {
+            "MiniMaxH3MemoryEfficientSolAttentionPatch": {},
+            "MiniMaxH3MemoryEfficientSageAttentionPatch": {},
+            "MiniMaxH3ChunkFeedForward": {},
+            "MiniMaxH3BlockCacheT8": {},
+        }
+        doctor = {"runtime_capabilities": {"object_info": classes}}
+        self.assertEqual(
+            select_workflow_template("auto", doctor, component_set="portable-16gb-b"),
+            "h3_w4a8_t2v_compat",
+        )
+
+    def test_generate_command_keeps_custom_comfyui_when_run_root_is_elsewhere(self):
+        from h3_fastpath import build_generate_command
+
+        command = build_generate_command(
+            scripts_dir=SCRIPTS,
+            prompt_file=Path("E:/runs/prompt.txt"),
+            output_dir=Path("F:/MiniMax-H3/ComfyUI/output"),
+            comfyui=Path("F:/MiniMax-H3/ComfyUI"),
+            filename_prefix="video/test",
+            run_root=Path("E:/runs"),
+            profile="fast",
+            resolution="640x352",
+            length=124,
+            steps=4,
+            fps=24,
+            audio_policy="auto",
+        )
+
+        comfyui_index = command.index("--comfyui")
+        self.assertEqual(command[comfyui_index + 1], "F:\\MiniMax-H3\\ComfyUI")
+        self.assertNotEqual(command[comfyui_index + 1], "E:")
+        self.assertIn("--component-set", command)
 
     def test_fresh_environment_cache_is_reused_but_stale_cache_requires_doctor(self):
         from h3_fastpath import cache_is_fresh, cache_policy
@@ -396,6 +535,51 @@ class FastPathContractTests(unittest.TestCase):
 
         self.assertIn("h3_fastpath.py", skill)
         self.assertIn("Do not issue repeated one-shot status calls", skill)
+
+
+class CleanupSafetyTests(unittest.TestCase):
+    def test_cleanup_is_dry_run_first_and_preserves_special_directories(self):
+        from h3_cleanup import apply_cleanup, cleanup_plan
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            old = root / "20260101T000000Z_old"
+            recent = root / "20260813T000000Z_recent"
+            environment = root / "_environment"
+            for path in (old, recent, environment):
+                path.mkdir()
+                (path / "manifest.json").write_text("{}", encoding="utf-8")
+
+            plan = cleanup_plan(
+                root,
+                older_than_days=30,
+                keep_last=1,
+                now=datetime(2026, 8, 14, tzinfo=timezone.utc),
+            )
+
+            self.assertTrue(plan["dry_run"])
+            self.assertTrue(old.exists())
+            self.assertEqual([Path(item["path"]).name for item in plan["eligible"]], [old.name])
+            self.assertIn("_environment", plan["ignored"])
+
+            result = apply_cleanup(plan)
+            self.assertFalse(result["dry_run"])
+            self.assertFalse(old.exists())
+            self.assertTrue(recent.exists())
+            self.assertTrue(environment.exists())
+
+    def test_cleanup_rejects_a_target_outside_run_root(self):
+        from h3_cleanup import apply_cleanup
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / "runs"
+            root.mkdir()
+            outside = Path(directory) / "20260101T000000Z_outside"
+            outside.mkdir()
+            plan = {"run_root": str(root), "eligible": [{"path": str(outside)}]}
+
+            with self.assertRaises(ValueError):
+                apply_cleanup(plan)
 
 
 if __name__ == "__main__":

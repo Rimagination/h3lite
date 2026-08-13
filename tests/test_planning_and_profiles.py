@@ -79,6 +79,15 @@ class PlanningContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             resolve_paths("reuse-existing")
 
+    def test_launch_profile_uses_vram_tier_not_component_filename(self):
+        from h3_plan import build_plan
+
+        low = build_plan(self.report_8gb, mode="fast", aspect="landscape", video_seconds=5)
+        high = build_plan(self.report_12gb, mode="fast", aspect="landscape", video_seconds=5)
+
+        self.assertTrue(low["decision"]["launch_profile"]["lowvram"])
+        self.assertFalse(high["decision"]["launch_profile"]["lowvram"])
+
 
 class GenerateProfileTests(unittest.TestCase):
     def test_lora_and_shift_overrides_are_explicit(self):

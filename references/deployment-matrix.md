@@ -68,9 +68,9 @@ blindly copying an old command.
 | Profile | Typical hardware | Model and graph | Starting output | Use when |
 | --- | --- | --- | --- | --- |
 | `experimental-6gb` | About 6 GB VRAM, preferably 32 GB system RAM, SSD and healthy pagefile | Begin with the official H3-compatible INT8/NVFP4 route when its exact files are available, or another explicitly validated 6 GB graph; use aggressive offload | 608x352, about 4-5 seconds, 4 steps | Community reports show successful 3060 6 GB laptop runs, but this is not the bundled W4A8 graph's validated floor. Expect high variance and long CPU/RAM offload. |
-| `low-vram-w4a8` | 8 GB VRAM, 32 GB system RAM, SSD | One registered W4A8 + Qwen3-VL 4B + Turbo LoRA component set; 4B ClipProj; dual VAEs; low-VRAM/offload flags | 640x352 fast default; 608x352 smoke test; 864x480 only after validation | Use `component-sets.md`; do not mix files across sets. |
-| `w4a8-mid` | 10-16 GB VRAM, 32 GB+ RAM | Same W4A8 family, with fewer offload constraints; keep the same audio and flow/sigma-shift path | 864x480; 124 frames; 4-8 steps | A reproducible baseline is more important than using the largest checkpoint. |
-| `w4a8-high` | 16 GB+ VRAM with 32 GB-class system RAM | Keep a registered W4A8 set as the first reproducible route | 864x480 after the fast baseline | VRAM alone does not prove that the native 32B route fits system RAM or its kernels. |
+| `low-vram-w4a8` | 8 GB VRAM, 32 GB system RAM, SSD | One registered W4A8 + Qwen3-VL 4B + Turbo LoRA component set; 4B ClipProj; dual VAEs; `--lowvram`/offload flags | 640x352 fast default; 608x352 smoke test; 864x480 only after validation | Use `component-sets.md`; do not mix files across sets. |
+| `w4a8-mid` | 10-<16 GB VRAM, 32 GB+ RAM | Same W4A8 family, normally without `--lowvram`; keep the same audio and flow/sigma-shift path | 864x480; 124 frames; 4-8 steps | A reproducible baseline is more important than using the largest checkpoint. |
+| `w4a8-high` | 16 GB+ VRAM with 32 GB-class system RAM | Keep a registered W4A8 set as the first reproducible route; normal VRAM launch by default | 864x480 after the fast baseline | VRAM alone does not prove that the native 32B route fits system RAM or its kernels. |
 | `native-int8` | More VRAM/RAM and a compatible current ComfyUI build | Official native H3 INT8 diffusion/text encoder/VAE set; optional Turbo LoRA and Sage Attention | Official H3 canvas, then a short comparison | Opt in only after the official workflow and runtime kernel set pass a smoke test. |
 | `blocked-or-alternative` | Less than about 6 GB VRAM, a 6 GB GPU with clearly insufficient system RAM/pagefile, less than 24 GB RAM generally, or insufficient SSD headroom | Do not download a large H3 model yet | N/A | Use a hosted/API backend, a smaller video model, or upgrade storage/RAM. |
 
@@ -231,10 +231,13 @@ Use configurable paths; the names below are the expected role and common filenam
 
 The exact ClipProj folder can vary with the custom node version. Inspect its example workflow and node documentation instead of guessing.
 
-The bundled `assets/h3_w4a8_t2v_api.json` is pinned to the validated
+The bundled `assets/h3_w4a8_t2v_api.json` and `assets/h3_w4a8_i2v_api.json` are
+pinned to the validated
 `minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors` variant and the
 validated `lightx2v_v0.1`-style filename. These are reproducibility anchors,
-not download promises. If a new machine has only another W4A8, ClipProj, or
+not download promises. The I2V graph adds only a native `LoadImage` input and
+uses the same diffusion, encoder, VAE, and Turbo component set. If a new
+machine has only another W4A8, ClipProj, or
 LightX2V filename, inspect the local loader choices and use the explicit
 resolver; never silently edit the public template or submit unresolved model
 names.
@@ -345,6 +348,13 @@ The low-VRAM route commonly needs these repositories or equivalents:
 - `ComfyUI-sol-attn`: optional attention acceleration;
 - `comfyui-minimax-h3-blockcache-T8`: optional block-cache acceleration.
 
+The accelerated bundled graph also requires the loaded classes
+`MiniMaxH3MemoryEfficientSageAttentionPatch`,
+`MiniMaxH3MemoryEfficientSolAttentionPatch`,
+`MiniMaxH3ChunkFeedForward`, and `MiniMaxH3BlockCacheT8`. A custom-node folder
+being present is not proof that its import succeeded; fastpath checks
+`/object_info` when available and otherwise falls back conservatively.
+
 Start with the official graph plus the minimum required nodes. Add attention and cache patches one at a time. If output becomes black, blocky, or unstable, restore the official H3 flow/sigma-shift path and remove optional patches before changing the prompt.
 
 ComfyUI merged its native MiniMax H3 audio scheduling fix on 2026-08-06. The
@@ -371,11 +381,36 @@ assume that a still-visible process is healthy after an OOM.
 
 A typical low-VRAM Windows launch uses a dedicated virtual environment and an explicit ComfyUI directory, for example:
 
-```text
-python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-api-nodes --lowvram --fast-disk
+```powershell
+New-Item -ItemType Directory -Force -Path .\user\h3lite_logs | Out-Null
+python main.py --listen 127.0.0.1 --port 8188 --disable-auto-launch --disable-api-nodes --lowvram --fast-disk *> .\user\h3lite_logs\comfyui.log
 ```
 
 Add `--use-sage-attention` only when Sage Attention and the installed PyTorch/CUDA build are compatible. Do not copy a launch line from another GPU without checking the local build. Keep the API bound to localhost unless the user explicitly needs network access and understands the security implications.
+
+When an agent starts ComfyUI in the background on Windows, give both native
+streams persistent file handles rather than leaving them attached to a
+temporary task pipe. Use separate files with `Start-Process`:
+
+```powershell
+$comfyui = '<ComfyUI>'
+$logRoot = Join-Path $comfyui 'user\h3lite_logs'
+New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+Start-Process -FilePath '<python.exe>' `
+  -ArgumentList 'main.py','--listen','127.0.0.1','--port','8188','--disable-auto-launch','--disable-api-nodes','--lowvram','--fast-disk' `
+  -WorkingDirectory $comfyui `
+  -RedirectStandardOutput (Join-Path $logRoot 'comfyui.stdout.log') `
+  -RedirectStandardError (Join-Path $logRoot 'comfyui.stderr.log') `
+  -WindowStyle Hidden
+```
+
+If a long-lived process later fails inside `tqdm/std.py` or `app/logger.py`
+with `OSError: [Errno 22] Invalid argument`, treat an invalid detached output
+handle as the leading diagnosis. Restart with persistent redirection and retry
+the same job. This failure does not by itself justify model downloads,
+dependency repair, or a full environment rescan. Keep logs outside timestamped
+run directories and rotate or archive them during maintenance so they do not
+grow without bound.
 
 ## Preflight and disk budget
 
@@ -397,6 +432,12 @@ Keep the first comparison fixed:
 - native audio path enabled.
 
 The first run can be slower because kernels compile and weights are moved between RAM and VRAM. Report warm-up and steady-state timings separately. Four-step output is a speed baseline, not a universal quality setting. Balanced and quality modes bypass the optional T8 Block Cache before increasing steps.
+
+A faster warm run does not mean ComfyUI returned a cached finished video.
+Weights may remain resident and unchanged loader/encoder/VAE nodes may report
+cache hits; changing the prompt or seed still reruns sampling and creates a new
+result. Describe cold and warm timings separately and do not compare them as if
+they were the same condition.
 
 After a verified success, save a compact empirical timing sample in
 `user/h3lite_runs/_environment/timing.json`. The planner automatically uses a

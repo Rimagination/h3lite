@@ -3,11 +3,13 @@
   "source_section": "https://github.com/MiniMax-AI/MiniMax-H3#reproducible-768p-cases",
   "assets": [
     {
-      "file": "minimax-official-i2va-ramen-first-frame.png",
+      "file": "h3lite-i2va-ramen-first-frame.jpg",
       "role": "first_frame",
+      "provenance": "user-selected lower-resolution H3 Lite QA input for the official I2VA ramen case",
       "source_script": "https://github.com/MiniMax-AI/MiniMax-H3/blob/main/scripts/readme/full-2k-i2va-h3-context-ir.sh",
-      "source_url": "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/H3_AA_I2VA/gallery/sr_v17_variants_seed42_43_20260724/inputs/4a3a90bf9100_KDmcbkhzYo5sjjxr9FqcVmWVnzb.png",
-      "sha256": "352e959e08b886406d3766cee25ebe7bbf679e6d53eeffbd1c607b8dc93e2068"
+      "original_local_file": "h3_qa_frames/ramen_first_frame_1280x704.jpg",
+      "dimensions": "1280x704",
+      "sha256": "bf0a5678eac1f55bc1e7c4750a1d6bb79f8ad0e5b437a411fd5c6beba97c3e26"
     },
     {
       "file": "minimax-official-ref2va-pink-suit-black-lamb.mp4",

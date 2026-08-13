@@ -17,36 +17,48 @@
 <a id="zh-cn"></a>
 ## 中文
 
-`H3 Lite` 是一个给 Codex 使用的 MiniMax H3 本地视频生成 skill。你只需要用自然语言描述想看的画面，它会根据电脑配置选择 ComfyUI 路线，准备必要组件，生成短视频并验证结果。
+`H3 Lite` 是一个给 Codex/WorkBuddy 等 Agent 使用的 MiniMax H3 本地视频生成 skill。你只需要用自然语言描述想看的画面，它会根据电脑配置选择 ComfyUI 路线，准备必要组件，生成短视频并验证结果。
+
+### 路线选择
+
+| 路线 | 输入 | 适合场景 |
+|---|---|---|
+| T2VA | 文字提示 | 文生视频，保留 H3 原生声音 |
+| I2VA | 一张首帧图片 + 文字提示 | 从指定画面开始生成视频 |
+| FL2VA | 首帧图片 + 尾帧图片 + 文字提示 | 约束视频的起点和终点 |
+| L2VA | 一张尾帧图片 + 文字提示 | 让视频收束到指定画面 |
+| Ref2VA | 参考图片、视频或音频 | 需要自定义参考素材的工作流 |
+
+I2VA、FL2VA 和 L2VA 通过 fastpath 的首帧/尾帧参数自动选择对应工作流；T2VA 直接使用文字提示。
 
 ### 一分钟开始
 
-不需要打开命令行，也不需要先学习 Python、ComfyUI 或模型安装。把下面这句话发给 Codex：
+把下面这句话发给 Codex，Codex 会根据你的电脑准备环境并开始本地生成：
 
 ```text
 请帮我安装这个 skill，并根据我的电脑配置准备本地 MiniMax H3 视频生成环境：
 https://github.com/Rimagination/h3lite
 ```
 
-如果需要指定安装位置，可以继续说：
+安装位置也可以直接写进需求：
 
 ```text
 请把 ComfyUI 放在 F:\MiniMax-H3\ComfyUI；如果那里已经是健康的安装，就直接复用。
 ```
 
-也可以说：
+项目内安装：
 
 ```text
 请把安装放在当前项目中。
 ```
 
-不想使用 agent 时，可以打开 [H3 Lite repository](https://github.com/Rimagination/h3lite)，选择 **Code → Download ZIP**，解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
+手动安装：打开 [H3 Lite repository](https://github.com/Rimagination/h3lite)，选择 **Code → Download ZIP**，解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
 
 ### 快速验证
 
 **案例 1 · 红球弹跳**
 
-安装完成后，可以先用这个简单案例快速验证视频与声音生成：
+安装完成后，先用这个简单案例验证视频与声音生成：
 
 ```text
 请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
@@ -54,21 +66,7 @@ https://github.com/Rimagination/h3lite
 
 ▶️ [播放 / 下载生成视频](assets/examples/h3lite-red-ball-and-plant.mp4)
 
-**案例 2 · 金毛幼犬醒来（分段提示）**
-
-连续动作按时间分段，通常能让模型更好地遵循动作顺序：
-
-```text
-使用 H3 Lite 生成一个 5 秒横屏视频：
-
-[0s-2s] 一只金毛幼犬蜷缩着睡在洒满阳光的木地板上，晨光透过窗户倾泻而入，尘埃微粒在空气中漂浮。
-
-[2s-5s] 幼犬慢慢醒来，前爪向前伸展，打了个带着细小吱声的哈欠，然后坐起身，用明亮好奇的眼睛环顾四周，尾巴开始摇晃。
-```
-
-▶️ [播放 / 下载生成视频](assets/examples/h3lite-golden-retriever-puppy.mp4)
-
-不需要自己填写模型名称、节点名称、采样步数或 ComfyUI 工作流。`H3 Lite` 会根据电脑和要求决定这些细节。
+**动作时间轴示例 · 金毛幼犬醒来**：[播放 / 下载](assets/examples/h3lite-golden-retriever-puppy.mp4)
 
 ### 以规范的提示词生成视频
 
@@ -80,7 +78,7 @@ https://github.com/Rimagination/h3lite
 
 1. **画面与氛围**：主体在哪里，光线、景别和风格是什么。
 2. **动作与镜头**：主体发生什么变化，镜头怎样运动。
-3. **声音**：环境声、动作声、音乐或对白；“不要对白”不等于静音。
+3. **声音**：环境声、动作声、音乐或对白；对白是可选项，环境声和动作声可以独立保留。
 
 **星舰跃迁（T2VA，8 秒）**
 
@@ -94,9 +92,9 @@ https://github.com/Rimagination/h3lite
 
 **拉面与家宴（I2VA，8 秒）**
 
-先下载或直接附上 MiniMax 官方案例的[拉面首帧图](assets/examples/minimax-official-i2va-ramen-first-frame.png)，明确将它指定为视频第一帧，然后发送：
+先下载或直接附上 H3 Lite 的[拉面示例首帧](assets/examples/h3lite-i2va-ramen-first-frame.jpg)，明确将它指定为视频第一帧，然后发送。这张图片采用较轻量的 1280×704 画布，宽高均为 32 的倍数，比 1920×1080 官方原图更适合本地 I2VA 快速尝试。
 
-![MiniMax H3 官方 I2VA 拉面首帧](assets/examples/minimax-official-i2va-ramen-first-frame.png)
+![H3 Lite I2VA 拉面示例首帧](assets/examples/h3lite-i2va-ramen-first-frame.jpg)
 
 ```text
 请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 8 秒视频，并保持图片中的人物、拉面、餐桌和房间构图。镜头全程固定：开始时让前景的青花瓷拉面碗、叉烧、葱花和升腾的热气清晰可见，背景中的家人保持柔和虚化；随后平稳地把焦点从拉面转移到家人，拉面逐渐虚化，家人的笑容、夹菜和轻微交谈动作变得清晰，热气始终在前景飘动。保留汤汁轻微沸腾声、碗筷碰撞声和温暖的室内环境声，加入轻柔的原声吉他与古筝音乐，不要清晰对白。
@@ -112,9 +110,9 @@ https://github.com/Rimagination/h3lite
 请使用 H3 Lite，根据我在这条消息中附上的参考视频和男声音频生成一个 5 秒视频：以参考视频作为画面、动作和背景音轨基础，保留金发男子、亮粉色西装、怀中的黑色小羊、夕阳草地、远处白羊以及原有镜头构图；只参考单独男声音频的音色来生成新对白。男子看向镜头自然说：“跟着风，自由生活。”说完后露出轻松的微笑，望向远处，并轻轻抚摸黑羊的毛，镜头缓慢推近。人物口型与中文对白同步，其余画面保持写实自然。
 ```
 
-以上素材来自 MiniMax H3 官方可复现案例的输入文件；来源 URL 和校验值记录在 [`assets/examples/sources.json`](assets/examples/sources.json)。I2VA 和 Ref2VA 需要相应的图片、视频或音频工作流；如果当前安装只有默认文本生成路线，H3 Lite 会先说明并引导配置缺少的模式。
+以上创意和 Ref2VA 素材来自 MiniMax H3 官方可复现案例；拉面首帧使用 H3 Lite 的本地示例版本。素材来源与校验值记录在 [`assets/examples/sources.json`](assets/examples/sources.json)。
 
-### 已验证电脑配置要求
+### 已验证配置与路线
 
 默认使用已经验证过的低显存 W4A8/4B fast 路线，优先保证笔记本上的成功率和速度。
 
@@ -127,57 +125,51 @@ https://github.com/Rimagination/h3lite
 | CPU | AMD Ryzen 7 8845H，8 核 16 线程 |
 | 内存 | 32 GB |
 | 系统 | Windows 11 专业版 64 位 |
-| 已验证路线 | W4A8/4B fast，4 步，ComfyUI，本地原生视频与声音生成 |
-| 已验证输出 | 640×352 的 5 秒视频；1280×704 的 8 秒星舰视频 |
+| 已验证路线 | W4A8/4B fast，4 步，ComfyUI，T2VA/I2VA，本地原生视频与声音生成 |
+| 已验证输出 | 640×352 的 5 秒 T2VA/I2VA 视频；1280×704 的 8 秒星舰视频 |
 
-这是目前有成片证据的基准配置，不代表最低要求。其他电脑档位仍按下面的保守建议选择：
+下面这台电脑提供当前基准结果；其他硬件按显存档位选择路线：
 
 | 电脑情况 | 默认建议 |
 |---|---|
-| NVIDIA 笔记本，约 8 GB 显存 | W4A8/4B fast，通常选择 640×352；明确指定更大画布时会提示风险 |
-| 10–16 GB 显存 | fast 或 balanced，可尝试更大画布 |
-| 16 GB 以上显存 | 可以尝试 balanced 或 quality，仍以实际驱动和组件为准 |
-| 没有 NVIDIA CUDA GPU | 不承诺本地 H3 路线，改用远程 API 或其他后端 |
+| NVIDIA 笔记本，约 8 GB 显存 | W4A8/4B fast，默认 640×352；更大画布交给 planner 评估 |
+| 10–16 GB 显存 | fast 或 balanced；默认不加 `--lowvram`，可尝试更大画布 |
+| 16 GB 以上显存 | balanced 或 quality，按驱动与已安装组件选择 |
 
-模型权重、ComfyUI 和第三方 custom nodes 不包含在仓库中。它们体积较大，并且各自有版本与许可要求；缺少组件时，Codex 会告诉你需要准备什么。
+模型权重、ComfyUI 和第三方 custom nodes 由各自项目提供；H3 Lite 负责按组件集把它们接入对应工作流。
 
-### 常见问题
+#### 组件集
 
-**需要懂代码吗？**
-
-不需要。普通用户只需安装 skill，然后用自然语言描述视频。
-
-**“不要对白”是不是完全静音？**
-
-不是。`不要对白` 只表示没有 spoken dialogue；默认仍保留雨声、脚步声、室内环境声等自然音效。需要完全静音时，请明确说“完全静音，不要对白、音乐和环境声”。
-
-**可以自己指定分辨率吗？**
-
-可以。H3 Lite 会提示 OOM 或耗时风险，但不会偷偷替换你明确指定的画布。
-
-**第一次为什么可能比较慢？**
-
-第一次运行可能需要加载模型、编译 CUDA 内核或进行低显存 CPU offload。成功运行后，H3 Lite 会记录实际耗时，用于改进下一次估计。
-
-**没有 NVIDIA 显卡可以用吗？**
-
-本地 CUDA 路线不承诺支持；可以改用远程 API 或其他视频生成后端。
+H3 Lite 提供两套完整组件集：运行时通过 `--component-set A`
+或 `--component-set B` 选择一套完整组合。Set B 的自动路线使用兼容工作流；Set A 在加速节点齐全时使用 fast 工作流。
 
 <a id="english"></a>
 ## English
 
-`H3 Lite` is a Codex skill for local MiniMax H3 video generation. Describe the video you want in plain English, and it chooses a ComfyUI route from your hardware, prepares the required components, generates the clip, and verifies the result.
+`H3 Lite` is an Agent skill for Codex, WorkBuddy, and similar tools for local MiniMax H3 video generation. Describe the video you want in plain English, and it chooses a ComfyUI route from your hardware, prepares the required components, generates the clip, and verifies the result.
+
+### Choose a route
+
+| Route | Input | Best for |
+|---|---|---|
+| T2VA | Text prompt | Text-to-video with native H3 audio |
+| I2VA | One first-frame image + text prompt | Starting from a specified image |
+| FL2VA | First-frame and last-frame images + text prompt | Constraining both ends of a clip |
+| L2VA | One last-frame image + text prompt | Ending on a specified image |
+| Ref2VA | Reference image, video, or audio | Custom reference workflows |
+
+Fastpath selects T2VA, I2VA, FL2VA, or L2VA from the supplied first/last-frame arguments. Ref2VA uses a matching custom workflow and reference assets.
 
 ### One-minute start
 
-You do not need to open a terminal or learn Python, ComfyUI, or model installation. Send this to Codex:
+Start by sending this to Codex. It will prepare the environment for your computer and begin local generation:
 
 ```text
 Please install this skill and prepare a local MiniMax H3 video-generation environment for my computer:
 https://github.com/Rimagination/h3lite
 ```
 
-To choose the installation location, say:
+Choose the installation location in the same request:
 
 ```text
 Put ComfyUI at F:\MiniMax-H3\ComfyUI. Reuse it if it is already healthy.
@@ -195,19 +187,7 @@ Use H3 Lite to generate a 5-second landscape video. A small matte red rubber bal
 
 ▶️ [Play / download the generated video](assets/examples/h3lite-red-ball-and-plant.mp4)
 
-**Example 2 · Golden retriever puppy wakes up (timeline prompt)**
-
-For consecutive actions, dividing the prompt by time usually helps the model follow the intended sequence more reliably:
-
-```text
-Use H3 Lite to generate a 5-second landscape video:
-
-[0s-2s] A golden retriever puppy sleeps curled up on a sunlit wooden floor, morning light streaming through a window, dust motes floating in the air.
-
-[2s-5s] The puppy slowly wakes up, stretches its front paws forward, yawns with a tiny squeak, then sits up and looks around with bright curious eyes as its tail starts wagging.
-```
-
-▶️ [Play / download the generated video](assets/examples/h3lite-golden-retriever-puppy.mp4)
+**Timeline example · Golden retriever puppy wakes up**: [Play / download](assets/examples/h3lite-golden-retriever-puppy.mp4)
 
 ### Generate video with structured prompts
 
@@ -219,7 +199,7 @@ Use a simple three-part structure:
 
 1. **Scene and atmosphere**: subject, setting, lighting, framing, and style.
 2. **Action and camera**: what changes and how the camera moves.
-3. **Sound**: ambience, action sounds, music, or dialogue; “no dialogue” does not mean silence.
+3. **Sound**: ambience, action sounds, music, or dialogue; dialogue is optional and ambience can remain active on its own.
 
 **Starship jump (T2VA, 8 seconds)**
 
@@ -233,9 +213,9 @@ Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a sta
 
 **Ramen family dinner (I2VA, 8 seconds)**
 
-Download or directly attach MiniMax's official [ramen first frame](assets/examples/minimax-official-i2va-ramen-first-frame.png), designate it as the video's first frame, and then send:
+Download or directly attach H3 Lite's [ramen example first frame](assets/examples/h3lite-i2va-ramen-first-frame.jpg), designate it as the video's first frame, and then send. Its lighter 1280×704 canvas uses dimensions divisible by 32 and is better suited to quick local I2VA trials than the official 1920×1080 source.
 
-![Official MiniMax H3 I2VA ramen first frame](assets/examples/minimax-official-i2va-ramen-first-frame.png)
+![H3 Lite I2VA ramen example first frame](assets/examples/h3lite-i2va-ramen-first-frame.jpg)
 
 ```text
 Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate an 8-second video while preserving its people, ramen, table, room, and composition. Keep the camera static. Begin with the blue-and-white ramen bowl, chashu, scallions, and rising steam in crisp foreground focus while the family remains softly blurred. Smoothly rack focus from the ramen to the family: the bowl softens, their smiles and small dining gestures become clear, and steam continues drifting through the foreground. Keep the quiet broth simmer, ceramic and chopstick clinks, and warm room tone. Add gentle acoustic guitar and koto music, with no intelligible dialogue.
@@ -251,9 +231,9 @@ Download MiniMax's official [reference video](assets/examples/minimax-official-r
 Use H3 Lite to generate a 5-second video from the reference video and male voice sample attached to this message. Use the reference video as the visual, motion, and background-audio foundation, preserving the blond man, bright pink suit, black lamb in his arms, golden-hour pasture, distant white lambs, and original camera composition. Use only the separate male voice sample's timbre to generate new dialogue. Looking toward the camera, he naturally says, “Follow the wind, live free.” He then smiles peacefully, looks toward the horizon, and gently strokes the lamb as the camera slowly pushes in. Keep realistic motion and synchronize his lips to the English dialogue.
 ```
 
-These files are the inputs referenced by MiniMax H3's official reproducible cases; their source URLs and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json). I2VA and Ref2VA require the corresponding image, video, or audio workflow. If the installation only has the default text-to-video route, H3 Lite explains what is missing and guides the user through configuring that mode.
+The ideas and Ref2VA assets come from MiniMax H3's official reproducible cases; the ramen first frame is H3 Lite's local example version. Asset provenance and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json).
 
-### Validated hardware configuration
+### Validated hardware and profiles
 
 The default is the validated low-VRAM W4A8/4B fast route, prioritizing a reliable and reasonably fast result on laptops.
 
@@ -266,37 +246,22 @@ The red-ball, golden-retriever, and starship videos in this repository were gene
 | CPU | AMD Ryzen 7 8845H, 8 cores / 16 threads |
 | Memory | 32 GB |
 | System | Windows 11 Pro, 64-bit |
-| Validated route | W4A8/4B fast, 4 steps, ComfyUI, local native video and audio generation |
-| Validated outputs | 640×352 five-second clips; 1280×704 eight-second starship clip |
+| Validated route | W4A8/4B fast, 4 steps, ComfyUI, T2VA/I2VA, local native video and audio generation |
+| Validated outputs | 640×352 five-second T2VA/I2VA clips; 1280×704 eight-second starship clip |
 
-This is the current evidence-backed reference configuration, not a claimed minimum. Use the following conservative guidance for other machines:
+Use this as the reference profile and select the route by VRAM:
 
 | Machine | Default recommendation |
 |---|---|
-| NVIDIA laptop with about 8 GB VRAM | W4A8/4B fast, usually 640×352; an explicit larger canvas triggers a risk warning |
-| 10–16 GB VRAM | Fast or balanced; larger canvases may be practical |
-| More than 16 GB VRAM | Balanced or quality can be tested, subject to the driver and installed components |
-| No NVIDIA CUDA GPU | Use a remote API or another backend instead of the local CUDA route |
+| NVIDIA laptop with about 8 GB VRAM | W4A8/4B fast, default 640×352; the planner selects larger canvases when appropriate |
+| 10–16 GB VRAM | Fast or balanced; omit `--lowvram` by default and test larger canvases gradually |
+| More than 16 GB VRAM | Balanced or quality, using the installed driver and components |
 
-Model weights, ComfyUI, and third-party custom nodes are not bundled. They are large, version-sensitive, and subject to their own licenses.
+Model weights, ComfyUI, and third-party custom nodes come from their respective projects; H3 Lite integrates them into the selected workflow.
 
-### FAQ
+#### Component sets
 
-**Do I need to know how to code?**
-
-No. Install the skill and describe the video in plain language.
-
-**Does “No dialogue” mean complete silence?**
-
-No. It removes spoken dialogue but keeps natural environmental sound by default. Ask for complete silence if you want no dialogue, music, or ambient sound.
-
-**Can I specify a resolution?**
-
-Yes. H3 Lite keeps an explicit canvas and gives one concise OOM or time warning.
-
-**Why can the first run be slower?**
-
-Models may need to load, CUDA kernels may compile, and low-VRAM CPU offload may occur. Successful runs update the empirical timing estimate.
+H3 Lite provides two complete component sets. Select one with `--component-set A` or `--component-set B`; Set B uses the compatibility workflow by default, while Set A uses the fast workflow when its acceleration nodes are loaded.
 
 <a id="references--参考资料"></a>
 ## References / 参考资料

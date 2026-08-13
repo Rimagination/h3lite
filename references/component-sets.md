@@ -19,8 +19,13 @@ an already working installation.
 | Video VAE | `minimax_h3_video_vae_fp16.safetensors` | 5,207,808,496 |
 | Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | 605,254,808 |
 
-Use `h3_w4a8_t2v_api.json` only when the Sol Attention and H3 T8 Block Cache
-node classes are available. Use `h3_w4a8_t2v_compat_api.json` otherwise.
+Use `h3_w4a8_t2v_api.json` or `h3_w4a8_i2v_api.json` only when the Sage, Sol,
+Chunk Feed Forward, and H3 T8 Block Cache node classes are loaded. Use the matching
+`*_compat_api.json` template otherwise. The same component set supports the
+native `MiniMaxH3ImageToVideo` first/last-frame inputs; the I2V templates do
+not require a separate model download.
+
+The command-line ID is `validated-low-vram-a` (short alias `A`).
 
 ## Set B — portable 16 GB candidate
 
@@ -32,13 +37,25 @@ for Set A.
 | --- | --- | --- |
 | W4A8 diffusion | `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors` | `Kijai/MiniMax-H3-experimental`; 12,540,858,008 |
 | Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` | `Comfy-Org/Krea-2`; 5,242,467,968 |
-| ClipProj | `mmh3-4b-ClipProj-celeb-mlp.safetensors` | `NicoLab28/ClipProj-MiniMax-H3`; verify repository metadata |
-| Turbo LoRA | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors` | `drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`; verify repository metadata |
+| ClipProj | `mmh3-4b-ClipProj-celeb-mlp.safetensors` | `NicoLab28/ClipProj-MiniMax-H3`; 304,213,176; SHA-256 `275b389991276532d969dbb32f91ce67e170549873e61819cfec52a770660699` |
+| Turbo LoRA | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors` | `drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`; 298,177,224; SHA-256 `1b85da614014024a0c9507f12558917dcc69b6adb564e716324594f401723115` |
 | Video VAE | `minimax_h3_video_vae_fp16.safetensors` | `Comfy-Org/MiniMax-H3`; 5,207,808,496 |
-| Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | `Comfy-Org/MiniMax-H3`; verify repository metadata |
+| Audio VAE | `minimax_h3_audio_vae_fp32.safetensors` | `Comfy-Org/MiniMax-H3`; 605,254,808; SHA-256 `8e505d95dd1561d47abd43d4238fd40d9bb1ae9e147ed0a4cba778d76ae4db48` |
 
 Pin the exact workflow and node revisions used by this set in its environment
 manifest. Do not silently select it through a loose filename match.
+
+The command-line ID is `portable-16gb-b` (short alias `B`). In `auto` mode,
+H3 Lite currently keeps this set on the compatibility workflow until a pinned
+accelerated run records the full Sage/Sol/Chunk/T8 chain. Use
+`--acceleration fast` only for an intentional comparison. If both Set A and
+Set B are installed, pass `--component-set A` or `--component-set B`; do not
+let a filename heuristic choose between them.
+
+The Set B diffusion checkpoint must be exactly 12,540,858,008 bytes with
+SHA-256 `01aa7b92c007c599890461c325f9b7e3c96fb06c36f242f95b62f7f20e538dec`.
+A historical same-size local copy was corrupted by two downloaders writing the
+same destination and produced colored mosaic output. Never accept size alone.
 
 ## Experimental quality route
 

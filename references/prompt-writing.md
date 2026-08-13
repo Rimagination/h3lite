@@ -57,6 +57,24 @@ complete silence is explicitly requested.
 
 Useful camera vocabulary includes `Zoom`, `Push`, `Pan`, `Truck`, `Tilt`, `Pedestal`, `Arc`, `Tracking`, `Static`, `Shake`, `POV`, and `Roll`. When a camera move matters, state its type plus a useful amplitude and speed, such as a slow, subtle push-in or a fast handheld shake.
 
+## Camera position and subject orientation
+
+Describe subject orientation separately from camera movement. A location or
+activity does not determine whether a face is visible: “two people watch the
+sunset” commonly produces a back view unless the camera relationship is stated.
+
+- Front view: `The subject faces the camera directly; both eyes and the full face remain clearly visible. The camera slowly pushes in from the front.`
+- Three-quarter view: `The body turns slightly away while the face stays at a three-quarter angle toward the camera; both eyes remain visible.`
+- Profile: `The subject faces screen right in a clean side profile; the camera holds at eye level.`
+- Back view: `The subject stands with their back to the camera, facing the sunset; the face is not visible.`
+- Front-facing sunset composition: `The camera is positioned between the sunset and the subjects, looking back toward their faces; both subjects face the camera with the sunset glowing behind them.`
+
+When facial identity matters, combine orientation with shot size and visibility,
+for example `front-facing medium close-up, unobstructed face, both eyes visible`.
+Avoid contradictory instructions such as “back to camera” and “full face
+visible” in the same shot. Restate orientation after a cut when the new camera
+position changes it.
+
 ## References and image modes
 
 For `I2VA`, make the first-frame anchor explicit at 0.00 seconds, then describe what develops from it. For `FL2VA`, anchor the first reference at 0.00 seconds and the second at the final timestamp; describe a physically and narratively continuous path between them. For `L2VA`, state that the reference is reached at the final timestamp and describe the lead-in.

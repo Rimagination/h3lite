@@ -23,6 +23,27 @@ DEFAULT_CACHE_MAX_AGE = 30 * 60
 DEFAULT_WATCH_INTERVAL = 20.0
 DEFAULT_WATCH_TIMEOUT = 3600.0
 
+ACCELERATION_CLASS_REQUIREMENTS = {
+    "sol_attention": ("MiniMaxH3MemoryEfficientSolAttentionPatch",),
+    "sage_attention": ("MiniMaxH3MemoryEfficientSageAttentionPatch",),
+    "chunk_feed_forward": ("MiniMaxH3ChunkFeedForward",),
+    "block_cache": ("MiniMaxH3BlockCacheT8",),
+}
+
+# Set B has a real generation record but no pinned local evidence for the full
+# Sol/Sage/Chunk/T8 chain. Keep it on the compatibility graph in auto mode
+# until a matching accelerated run is recorded.
+COMPONENT_SET_ACCELERATION_POLICY = {
+    "portable-16gb-b": "compat",
+}
+
+REFERENCE_MODE_LABELS = {
+    "t2v": "T2VA",
+    "i2va": "I2VA",
+    "fl2va": "FL2VA",
+    "l2va": "L2VA",
+}
+
 
 class FastPathError(RuntimeError):
     """An actionable error in the single-entry fast route."""
@@ -121,6 +142,7 @@ def build_generate_command(
     base_url: str = "http://127.0.0.1:8188",
     prompt_file: str | Path,
     output_dir: str | Path,
+    comfyui: str | Path,
     filename_prefix: str,
     run_root: str | Path,
     profile: str,
@@ -135,6 +157,9 @@ def build_generate_command(
     watch_timeout: float = DEFAULT_WATCH_TIMEOUT,
     dynamic_check: bool = True,
     workflow_template: str = "h3_w4a8_t2v",
+    component_set: str = "auto",
+    first_frame: str | Path | None = None,
+    last_frame: str | Path | None = None,
 ) -> list[str]:
     """Build one end-to-end generate-and-watch command."""
     command = [
@@ -149,7 +174,7 @@ def build_generate_command(
         "--output-dir",
         str(output_dir),
         "--comfyui",
-        str(Path(run_root).parent.parent),
+        str(comfyui),
         "--filename-prefix",
         filename_prefix,
         "--run-root",
@@ -173,9 +198,15 @@ def build_generate_command(
         _format_number(watch_timeout),
         "--json",
         "--resolve-models",
+        "--component-set",
+        component_set,
     ]
     if seed is not None:
         command.extend(["--seed", str(seed)])
+    if first_frame is not None:
+        command.extend(["--first-frame", str(first_frame)])
+    if last_frame is not None:
+        command.extend(["--last-frame", str(last_frame)])
     if allow_duplicate:
         command.append("--allow-duplicate")
     if dynamic_check:
@@ -277,6 +308,7 @@ def _build_plan(
     output_dir: Path,
     run_root: Path,
     timing_file: Path,
+    reference_mode: str,
 ) -> dict[str, Any]:
     from h3_plan import build_plan, resolve_paths
 
@@ -296,22 +328,132 @@ def _build_plan(
         megapixels=args.megapixels,
         paths={**paths, "run_root": str(run_root)},
         timing_file=timing_file,
+        reference_mode=REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper()),
     )
 
 
-def select_workflow_template(requested: str, doctor: dict[str, Any]) -> str:
-    """Select acceleration only when both optional node roles are installed."""
-    if requested != "auto":
-        return requested
+def resolve_reference_mode(args: argparse.Namespace) -> str:
+    """Resolve an explicit or inferred H3 reference route."""
+    has_first = bool(getattr(args, "first_frame", None))
+    has_last = bool(getattr(args, "last_frame", None))
+    inferred = "fl2va" if has_first and has_last else "i2va" if has_first else "l2va" if has_last else "t2v"
+    requested_mode = getattr(args, "mode", "auto")
+    mode = requested_mode if requested_mode != "auto" else inferred
+    requirements = {
+        "t2v": (False, False),
+        "i2va": (True, False),
+        "fl2va": (True, True),
+        "l2va": (False, True),
+    }
+    required = requirements[mode]
+    if (has_first, has_last) != required:
+        expected = {
+            "t2v": "no frame images",
+            "i2va": "--first-frame only",
+            "fl2va": "both --first-frame and --last-frame",
+            "l2va": "--last-frame only",
+        }[mode]
+        raise FastPathError(f"--mode {mode} requires {expected}")
+    return mode
+
+
+def _registered_classes(object_info: Any) -> set[str]:
+    if not isinstance(object_info, dict):
+        return set()
+    nodes = object_info.get("nodes")
+    if isinstance(nodes, dict):
+        return {str(name) for name in nodes}
+    return {str(name) for name in object_info}
+
+
+def _acceleration_capabilities(doctor: dict[str, Any]) -> dict[str, bool]:
+    """Use loaded ComfyUI classes when available; directory hints are fallback only."""
+    runtime = doctor.get("runtime_capabilities") if isinstance(doctor, dict) else None
+    has_object_info_probe = isinstance(runtime, dict) and "object_info" in runtime
+    object_info = runtime.get("object_info") if isinstance(runtime, dict) else None
+    if has_object_info_probe and object_info is None:
+        return {role: False for role in ACCELERATION_CLASS_REQUIREMENTS}
+    if object_info is not None:
+        registered = _registered_classes(object_info)
+        return {
+            role: any(class_name in registered for class_name in class_names)
+            for role, class_names in ACCELERATION_CLASS_REQUIREMENTS.items()
+        }
+
     node_map = doctor.get("custom_nodes", {}).get("nodes", {})
-    accelerated = all(
-        isinstance(node_map.get(role), dict) and node_map[role].get("present") is True
-        for role in ("sol_attention", "block_cache")
-    )
+    directory_roles = {
+        "sol_attention": "sol_attention",
+        "sage_attention": "sage_attention",
+        "chunk_feed_forward": "h3_turbo",
+        "block_cache": "block_cache",
+    }
+    return {
+        role: isinstance(node_map.get(node_role), dict) and node_map[node_role].get("present") is True
+        for role, node_role in directory_roles.items()
+    }
+
+
+def _component_set_candidates_from_doctor(doctor: dict[str, Any]) -> list[str]:
+    names: set[str] = set()
+    models = doctor.get("models") if isinstance(doctor, dict) else None
+    assets = models.get("assets") if isinstance(models, dict) else None
+    if isinstance(assets, dict):
+        for asset in assets.values():
+            found = asset.get("found") if isinstance(asset, dict) else None
+            if not isinstance(found, list):
+                continue
+            for item in found:
+                if isinstance(item, dict) and item.get("path"):
+                    names.add(Path(str(item["path"])).name)
+    from h3_generate import component_set_candidates
+
+    return component_set_candidates(names)
+
+
+def select_workflow_template(
+    requested: str,
+    doctor: dict[str, Any],
+    reference_mode: str = "t2v",
+    component_set: str = "auto",
+    acceleration: str = "auto",
+) -> str:
+    """Select a route from reference mode, component set, and loaded node classes."""
+    wants_reference = reference_mode != "t2v"
+    if requested != "auto":
+        template_is_reference = requested.startswith("h3_w4a8_i2v")
+        if template_is_reference != wants_reference:
+            expected = "an I2V template" if wants_reference else "a T2V template"
+            raise FastPathError(f"workflow template {requested} is incompatible with {reference_mode.upper()}; choose {expected}")
+        return requested
+
+    acceleration = (acceleration or "auto").strip().lower()
+    if acceleration not in {"auto", "fast", "compat"}:
+        raise FastPathError("--acceleration must be auto, fast, or compat")
+    if acceleration == "compat":
+        accelerated = False
+    else:
+        capabilities = _acceleration_capabilities(doctor)
+        accelerated = all(capabilities.values())
+        if acceleration == "fast" and not accelerated:
+            missing = [role for role, present in capabilities.items() if not present]
+            raise FastPathError("accelerated route requested but loaded node classes are missing: " + ", ".join(missing))
+        normalized_set = component_set
+        try:
+            from h3_generate import normalize_component_set
+
+            normalized_set = normalize_component_set(component_set)
+        except ValueError as exc:
+            raise FastPathError(str(exc)) from exc
+        if acceleration == "auto" and COMPONENT_SET_ACCELERATION_POLICY.get(normalized_set) == "compat":
+            accelerated = False
+    if wants_reference:
+        return "h3_w4a8_i2v" if accelerated else "h3_w4a8_i2v_compat"
     return "h3_w4a8_t2v" if accelerated else "h3_w4a8_t2v_compat"
 
 
 def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
+    reference_mode = resolve_reference_mode(args)
+    reference_mode_label = REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper())
     comfyui = normalize_windows_path(args.comfyui).resolve()
     output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else comfyui / "output"
     run_root = normalize_windows_path(args.run_root).resolve() if args.run_root else comfyui / "user" / "h3lite_runs"
@@ -349,6 +491,29 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
     if policy != "reuse":
         _run_doctor(args, doctor_path)
     doctor = _load_json(doctor_path)
+    try:
+        object_info = json_request(args.base_url, "/object_info")
+    except Exception:
+        # Older or restricted ComfyUI builds may not expose object_info. Keep
+        # the explicit compatibility route rather than trusting a directory
+        # name to prove that an optional node imported successfully.
+        object_info = None
+    routing_doctor = dict(doctor)
+    routing_doctor["runtime_capabilities"] = {"object_info": object_info}
+    requested_component_set = getattr(args, "component_set", "auto")
+    from h3_generate import normalize_component_set
+
+    normalized_component_set = normalize_component_set(requested_component_set)
+    component_candidates = _component_set_candidates_from_doctor(doctor)
+    if normalized_component_set == "auto" and len(component_candidates) > 1:
+        raise FastPathError(
+            "multiple complete component sets are installed: "
+            + ", ".join(component_candidates)
+            + "; rerun with --component-set A or --component-set B"
+        )
+    selected_component_set = normalized_component_set
+    if selected_component_set == "auto" and len(component_candidates) == 1:
+        selected_component_set = component_candidates[0]
 
     prompt_file = _prompt_file(args, run_root)
     prompt_text = prompt_file.read_text(encoding="utf-8")
@@ -360,7 +525,12 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         output_dir=output_dir,
         run_root=run_root,
         timing_file=timing_file,
+        reference_mode=reference_mode,
     )
+    if isinstance(plan.get("request"), dict):
+        plan["request"]["reference_mode"] = reference_mode_label
+    if isinstance(plan.get("decision"), dict):
+        plan["decision"]["reference_mode"] = reference_mode_label
     _write_json(plan_path, plan)
 
     from h3_preflight import assess_runtime_risk, refresh_runtime
@@ -376,11 +546,18 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
     resolution_text = f"{int(resolution['width'])}x{int(resolution['height'])}"
     profile = str(decision["mode"])
     filename_prefix = args.filename_prefix or "video/H3Lite_fastpath"
-    workflow_template = select_workflow_template(args.workflow_template, doctor)
+    workflow_template = select_workflow_template(
+        args.workflow_template,
+        routing_doctor,
+        reference_mode,
+        component_set=selected_component_set,
+        acceleration=getattr(args, "acceleration", "auto"),
+    )
     generation_command = build_generate_command(
         base_url=args.base_url,
         prompt_file=prompt_file,
         output_dir=output_dir,
+        comfyui=comfyui,
         filename_prefix=filename_prefix,
         run_root=run_root,
         profile=profile,
@@ -395,6 +572,9 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         watch_timeout=args.watch_timeout,
         dynamic_check=args.dynamic_check,
         workflow_template=workflow_template,
+        component_set=selected_component_set,
+        first_frame=getattr(args, "first_frame", None),
+        last_frame=getattr(args, "last_frame", None),
     )
 
     if args.dry_run:
@@ -406,6 +586,14 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
             "plan": plan,
             "preflight": preflight,
             "prompt_file": str(prompt_file),
+            "reference_mode": reference_mode_label,
+            "workflow_template": workflow_template,
+            "component_set": selected_component_set,
+            "component_candidates": component_candidates,
+            "runtime_capabilities": {
+                "object_info_available": object_info is not None,
+                "acceleration": _acceleration_capabilities(routing_doctor),
+            },
             "generation_command": generation_command,
         }
 
@@ -415,6 +603,10 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         "cache_policy": policy,
         "preflight": preflight,
         "plan": plan,
+        "reference_mode": reference_mode_label,
+        "workflow_template": workflow_template,
+        "component_set": selected_component_set,
+        "component_candidates": component_candidates,
         "generation": generation,
         "prompt_id": generation.get("prompt_id"),
     }
@@ -434,7 +626,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--timing-file", help="timing history used by the planner")
     parser.add_argument("--root", help="disk root used by a cold-start doctor scan")
     parser.add_argument("--profile", choices=["auto", "fast", "balanced", "quality"], default="auto")
-    parser.add_argument("--workflow-template", choices=["auto", "h3_w4a8_t2v", "h3_w4a8_t2v_compat"], default="auto", help="auto uses acceleration only when its nodes are present")
+    parser.add_argument(
+        "--workflow-template",
+        choices=["auto", "h3_w4a8_t2v", "h3_w4a8_t2v_compat", "h3_w4a8_i2v", "h3_w4a8_i2v_compat"],
+        default="auto",
+        help="auto selects the route from loaded node classes and component-set policy",
+    )
+    parser.add_argument(
+        "--component-set",
+        default="auto",
+        help="registered model set: auto, A/validated-low-vram-a, or B/portable-16gb-b",
+    )
+    parser.add_argument(
+        "--acceleration",
+        choices=["auto", "fast", "compat"],
+        default="auto",
+        help="optional acceleration policy; auto is conservative for unvalidated component sets",
+    )
+    parser.add_argument("--mode", choices=["auto", "t2v", "i2va", "fl2va", "l2va"], default="auto", help="reference route; inferred from frame arguments when omitted")
+    parser.add_argument("--first-frame", help="local first-frame image for I2VA/FL2VA")
+    parser.add_argument("--last-frame", help="local last-frame image for L2VA/FL2VA")
     parser.add_argument("--target-minutes", type=float)
     parser.add_argument("--aspect", default="landscape")
     parser.add_argument("--video-seconds", type=float, default=5.0)

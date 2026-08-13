@@ -19,6 +19,7 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - If the user can only download from the public internet, run a cold-path download plan before fetching multi-GB files: test candidate raw URLs with a small ranged download, choose the fastest stable source, estimate wall-clock time, then use resumable `.part` downloads. Do not pretend scripts can beat the user's real bandwidth.
 - Before downloading large assets, run the doctor compatibility probe. Stop on a Torch import error; treat a comfy-kitchen/Torch mismatch as a repair decision, not a post-download surprise. Do not silently substitute model files or start unlimited parallel downloads.
 - Treat the diffusion checkpoint, text encoder, Turbo LoRA, workflow, and node revisions as one component set. Read `references/component-sets.md` during installation, migration, model replacement, or kernel repair. Never construct an unvalidated set from individually plausible filenames.
+- Use `--component-set auto` for one unambiguous installed set, or explicitly select `A`/`validated-low-vram-a` or `B`/`portable-16gb-b` when both sets are installed. Record the selected set in the run manifest; never resolve a partial set role by role.
 - Do not redistribute model weights by default. Respect each model and node repository's license; let the user download weights from the selected source.
 - Prefer the ComfyUI HTTP API with an API-format workflow JSON. Use browser/CDP capture only as a recovery path when no reusable workflow JSON exists.
 - Check `http://127.0.0.1:8188/system_stats` before starting anything. If ComfyUI is already healthy, reuse it and do not restart it or rediscover its workflow history.
@@ -32,6 +33,8 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Keep agent-facing status compact: omit ComfyUI's full history graph by default; use verbose history only when diagnosing a failure.
 - Never submit an identical configuration while its manifest is `submitting`, `queued`, or `running`. Return the existing prompt ID instead; use `--allow-duplicate` only when the user explicitly asks for a second identical run.
 - Treat low-VRAM timing as an empirical estimate. The first run can be much slower because kernels compile and weights move between system RAM and VRAM.
+- When launching ComfyUI as a background process, redirect stdout and stderr to persistent files. A detached pipe can become invalid after the launching session is cleaned up, leaving ComfyUI alive but causing tqdm/logger writes to fail with `OSError: [Errno 22] Invalid argument`. On that signature, restart ComfyUI with persistent logs; do not redownload models or rerun a full doctor unless the restart exposes another error.
+- Treat run-history cleanup as explicit maintenance, never hot-path work. Use `scripts/h3_cleanup.py` in dry-run mode first and require `--apply` before deleting eligible run snapshots. Preserve `_environment`, `_hotpath`, `_workflows`, `_experiments`, prompt folders, timing data, and generated output files.
 
 ## Installation target contract
 
@@ -122,8 +125,9 @@ the audio path or change the installation target to make the estimate fit.
 
 ## Fast path for ordinary text-to-video
 
-Use this path for a text-only H3 request on a machine that passes the low-VRAM
-doctor check. It is the default route for a short clip:
+Use this path for a short H3 clip on a machine that passes the low-VRAM doctor
+check. With no frame arguments it is T2VA; adding `--first-frame` or
+`--last-frame` selects the native reference route automatically:
 
 ```powershell
 python scripts/h3_fastpath.py `
@@ -134,6 +138,33 @@ python scripts/h3_fastpath.py `
   --filename-prefix video/H3Lite_my_clip `
   --json
 ```
+
+For image-to-video, pass the reference image directly. The helper stages an
+external image into `<ComfyUI>/input` using a content-addressed filename, then
+connects it to the native `MiniMaxH3ImageToVideo` node. No extra I2V node or
+manual JSON editing is required:
+
+```powershell
+python scripts/h3_fastpath.py `
+  --comfyui <ComfyUI-path> `
+  --mode i2va `
+  --first-frame <path-to-first-frame.png> `
+  --prompt-text "<rewritten I2VA prompt>" `
+  --resolution 640x352 `
+  --video-seconds 5 `
+  --filename-prefix video/H3Lite_i2va `
+  --json
+```
+
+Use `--mode fl2va --first-frame <first> --last-frame <last>` for fixed first
+and last images, or `--mode l2va --last-frame <last>` for a last-frame route;
+the helper removes the I2V template's first-frame placeholder automatically in
+the latter case.
+When `--mode auto` is left in place, the mode is inferred from the supplied
+frame arguments. The low-VRAM baseline remains 640x352, 124 frames, 4 steps,
+and native H3 audio. A validated RTX 4070 Laptop 8 GB I2VA run at that
+baseline took about 12 minutes; treat that as local empirical timing, not a
+guarantee.
 
 已配置环境的复跑路径就是这一条命令；不要再分别调用 doctor、plan、preflight、generate 和 status。Windows/Git Bash 路径请写 `F:/MiniMax-H3/ComfyUI`，不要写 `/f/MiniMax-H3/ComfyUI`。
 
@@ -158,9 +189,8 @@ custom workflows, or diagnosis. Never replace the fastpath with repeated
 one-shot status commands during a normal generation.
 
 Use the history/object-info/browser fallback only when the bundled template is
-incompatible, a custom reference mode is needed, or the queue reports a
-missing node/model. This keeps a normal request from paying workflow discovery
-cost on every run.
+incompatible, a Ref2VA/custom graph is needed, or the queue reports a missing
+node/model. T2VA, I2VA, FL2VA, and L2VA are now first-class bundled routes.
 
 ## Workflow
 
@@ -193,7 +223,7 @@ ComfyUI, nodes, Python packages, or model weights.
 
 ### 2. Select a profile
 
-- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, `--lowvram`, 640x352, 124 frames, and 4 steps. Use Block Cache only when its node is present; otherwise use the compatibility workflow. This is the success-rate baseline.
+- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, 640x352, 124 frames, and 4 steps. The launch profile uses `--lowvram` for the very-low/8 GB tiers; 10–16 GB systems use normal VRAM mode unless preflight or a prior OOM justifies offload. Use Block Cache only when its classes are actually loaded; otherwise use the compatibility workflow. This is the success-rate baseline.
 - **Balanced:** keep the low-VRAM canvas on an 8 GB laptop, use 6 steps, and bypass Block Cache. On a mid/high-VRAM machine, the planner may select 864x480.
 - **Quality:** use 8 steps and bypass Block Cache. On an 8 GB laptop, keep 640x352 and warn that W4A8/4B remains a quality ceiling; on a mid/high-VRAM machine, the planner may select 864x480.
 - **6 GB experimental:** when the machine has roughly 6 GB VRAM, 32 GB system RAM, an SSD, and sufficient pagefile headroom, permit a cautious first run at 608x352, 4 steps, and low-VRAM offload. Treat community timings as orientation only: reported I2V runs include about 345 seconds at 608x352/4 seconds and 441 seconds at 864x480/5 seconds, while another 640x480/5-second report took about 13.7 minutes. These used different official/community model and workflow combinations, so do not transfer the numbers to the bundled W4A8 graph as a promise.
@@ -216,12 +246,17 @@ the selected workflow. The baseline requires `ComfyUI-ClipProj` or a compatible
 implementation. KJNodes, H3 Turbo helper nodes, Sol Attention, and T8 Block
 Cache are optional unless the selected accelerated graph explicitly uses them.
 
-`h3_fastpath.py --workflow-template auto` is the default. It uses the
-accelerated graph only when Sol Attention and T8 Block Cache are present;
-otherwise it selects `h3_w4a8_t2v_compat`, which preserves the H3 sampler,
-native audio, ClipProj, LoRA, and dual VAEs without those optional patches.
+`h3_fastpath.py --workflow-template auto` is the default. It queries
+`/object_info` when available and uses the accelerated T2V or I2V graph only
+when the Sage, Sol, Chunk Feed Forward, and T8 classes are actually loaded.
+Pass `--component-set A` or `--component-set B` when both complete sets are
+installed. Set B currently defaults to the compatibility graph in `auto` mode
+until a pinned accelerated run is recorded; use `--acceleration fast` only for
+an intentional trial. Use `--acceleration compat` to force the fallback graph.
+Both graphs preserve the H3 sampler, native audio, ClipProj, LoRA, dual VAEs,
+and native first/last-frame inputs without optional patches.
 
-Keep optional INT8 loaders and experimental cache nodes disabled until the baseline works. Start ComfyUI with a profile-appropriate command; the low-VRAM baseline commonly uses `--lowvram` and `--fast-disk`. Add Sage Attention only after its PyTorch/CUDA compatibility is confirmed. Treat Easy Cache and generic cache nodes as opt-in experiments: community reports and local experience show that some settings can blur or damage motion/detail. Never enable a cache solely from a speed claim; compare a short output against the uncached baseline first.
+Keep optional INT8 loaders and experimental cache nodes disabled until the baseline works. Start ComfyUI with a profile-appropriate command; the very-low/8 GB launch profile commonly uses `--lowvram` and `--fast-disk`, while 10–16 GB systems normally omit `--lowvram` unless preflight or an earlier OOM justifies it. Add Sage Attention only after its PyTorch/CUDA compatibility is confirmed. Treat Easy Cache and generic cache nodes as opt-in experiments: community reports and local experience show that some settings can blur or damage motion/detail. Never enable a cache solely from a speed claim; compare a short output against the uncached baseline first.
 
 After installation, rerun the doctor and stop if any required model or node is missing. Do not start a long generation while the graph contains unresolved node classes.
 
@@ -295,6 +330,7 @@ For full-reference mode, use the six-section structure in the reference. Write t
 Make the prompt operational:
 
 - establish style, framing, subjects, environment, lighting, and initial state in Shot 1;
+- make each important person's orientation relative to the camera explicit when identity or facial visibility matters; “watching the sunset” alone often implies a back view. State front-facing, three-quarter, profile, or back-facing, and say whether the face and eyes must remain visible;
 - describe observable actions and state changes in playback order;
 - use later shot cut times only when a real cut introduces new information;
 - write camera motion as a natural sentence with motion type, amplitude, and speed when useful;
@@ -318,8 +354,11 @@ python scripts/h3_generate.py `
   --base-url http://127.0.0.1:8188 `
   --workflow-template h3_w4a8_t2v `
   --prompt-file prompts/current.txt `
+  --comfyui <ComfyUI-path> `
   --filename-prefix video/H3Lite_my_clip `
   --run-root <ComfyUI>\user\h3lite_runs `
+  --component-set auto `
+  --resolve-models `
   --audio-policy auto `
   --profile fast `
   --resolution 640x352 `
@@ -327,6 +366,27 @@ python scripts/h3_generate.py `
   --watch `
   --watch-interval 20 `
   --watch-timeout 3600 `
+  --json
+```
+
+For a lower-level I2VA or FL2VA run, use the matching bundled template and
+frame flags. `--workflow <file>` remains supported for custom Ref2VA or other
+graphs; the same flags will bind any existing `LoadImage` reference input, or
+add one when the H3 node has no connection yet:
+
+```powershell
+python scripts/h3_generate.py `
+  --workflow-template h3_w4a8_i2v `
+  --prompt-text "<rewritten I2VA prompt>" `
+  --first-frame <path-to-first-frame.png> `
+  --comfyui <ComfyUI-path> `
+  --output-dir <ComfyUI>\output `
+  --resolution 640x352 `
+  --length 124 `
+  --steps 4 `
+  --component-set auto `
+  --resolve-models `
+  --watch `
   --json
 ```
 
@@ -351,10 +411,14 @@ needs the full ComfyUI history graph. For a bounded foreground monitor, add
 `ok: false` and `complete: false`; only a completed, verified media response
 has `ok: true`.
 
+Do not describe a faster second run as a reused result. ComfyUI may retain model weights and reuse unchanged upstream node outputs such as encoder or VAE loading, but a changed prompt or seed still causes the sampler to generate a new video. Explain this distinction when a user asks why later runs are faster.
+
 The accelerated bundled template contains the prompt node, W4A8 model path, 4B
 ClipProj, dual VAE, Turbo LoRA, H3 sigma shifts, Sage/Sol/T8 patches, native
 audio, 124 frames, 640x352, and 4 steps. The compatibility template removes
-the optional Sage/Sol/T8 chain. Override `--seed`, `--width`,
+the optional Sage/Sol/T8 chain. `--resolve-models` switches the complete
+registered A/B component set atomically; use `--component-set B` when both
+sets are installed. Override `--seed`, `--width`,
 `--height`, `--length`, `--steps`, `--fps`, `--profile`, or `--resolution` only
 when needed. Prefer `--megapixels` for ComfyUI ResolutionSelector-style canvas
 choices such as `16:9 0.4MP -> 864x480`. `fast` keeps Block Cache; `balanced`
@@ -378,7 +442,7 @@ Do not report success from a queue ID alone. Confirm:
 - an MP4 or other intended video file exists;
 - the file has a video stream and, for native H3 output, an audio stream;
 - duration, frame count, and FPS are close to the requested values;
-- the first/middle/last samples are not black or flat; suspicious block/mosaic output still requires visual inspection, and when the user asked for an action, dynamic QA must classify the clip as `dynamic`;
+- the first/middle/last samples are not black, flat, or classified as `suspected_mosaic`; when the user asked for an action, dynamic QA must classify the clip as `dynamic`;
 - the output path and elapsed time are reported.
 - the plan's estimated range is compared with the actual ComfyUI execution time;
 - the configuration fingerprint and run manifest are recorded so a retry can be distinguished from an accidental duplicate;
@@ -403,13 +467,16 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `references/prompt-writing.md`: concise operational digest of MiniMax's official H3 prompt guide and prompt-writing skill.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
+- `assets/h3_w4a8_i2v_api.json`: reusable low-VRAM I2VA graph with native first-frame input and optional acceleration patches.
+- `assets/h3_w4a8_i2v_compat_api.json`: core I2VA graph with native first-frame input and no optional acceleration patches.
 - `scripts/h3_doctor.py`: dependency-free hardware, disk, model, and node diagnosis.
 - `scripts/h3_plan.py`: read-only hardware, resolution, time-budget, aspect-ratio, profile, and installation-path planner.
 - `scripts/h3_preflight.py`: read-only pagefile/RAM/VRAM/process/model/node gate before queueing.
-- `scripts/h3_generate.py`: fast template-based or custom-workflow submission with profile, resolution, prompt/settings overrides, and queue-only mode.
+- `scripts/h3_generate.py`: fast template-based or custom-workflow submission with profile, resolution, prompt/settings overrides, native first/last-frame binding, atomic A/B component-set selection, and queue-only mode.
 - `scripts/h3_status.py`: compact one-shot or bounded watch status, actual execution-time, media metadata verification, optional first/middle/last dynamic QA, and empirical timing-cache updates.
-- `scripts/h3_fastpath.py`: single-entry ordinary-generation route that reuses the environment cache and keeps queueing plus bounded verification in one command.
+- `scripts/h3_fastpath.py`: single-entry T2V/I2V route that reuses the environment cache, probes loaded node classes, routes component sets, and keeps queueing plus bounded verification in one command.
 - `scripts/h3_paths.py`: Windows path normalization for `F:/...` and Git Bash `/f/...` inputs.
+- `scripts/h3_cleanup.py`: dry-run-first maintenance for old timestamped run snapshots; preserves environment state and recent runs.
 
 ## Sources
 

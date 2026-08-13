@@ -56,6 +56,7 @@ def timing_key(
     fps: float,
     steps: int,
     variant: str | None = None,
+    reference_mode: str = "T2VA",
 ) -> str:
     """Return a stable key for empirical timings from comparable runs."""
     parts = [
@@ -65,6 +66,9 @@ def timing_key(
             f"{float(fps):g}",
             str(int(steps)),
     ]
+    route = str(reference_mode or "T2VA").upper()
+    if route != "T2VA":
+        parts.append(route)
     if variant:
         parts.append(str(variant))
     return "|".join(parts)
@@ -116,6 +120,7 @@ def record_timing_sample(run_root: str | Path | None, manifest_path: str | Path 
             float(settings["fps"]),
             int(settings["steps"]),
             timing_variant(settings),
+            str(settings.get("reference_mode") or "T2VA"),
         )
         root = Path(run_root).expanduser().resolve()
         timing_path = root / "_environment" / "timing.json"
@@ -130,6 +135,7 @@ def record_timing_sample(run_root: str | Path | None, manifest_path: str | Path 
                 "length": int(settings["length"]),
                 "fps": float(settings["fps"]),
                 "steps": int(settings["steps"]),
+                "reference_mode": str(settings.get("reference_mode") or "T2VA").upper(),
                 "samples_seconds": [],
             },
         )
@@ -294,6 +300,15 @@ def _mode_settings(mode: str) -> dict[str, Any]:
     raise ValueError(f"unknown mode: {mode}")
 
 
+def launch_profile_for_tier(tier: str) -> dict[str, Any]:
+    """Choose launch flags from hardware pressure, not from model filename."""
+    return {
+        "lowvram": tier in {"very-low", "low"},
+        "fast_disk": True,
+        "reason": "8GB-or-less offload profile" if tier in {"very-low", "low"} else "normal VRAM profile",
+    }
+
+
 def _estimate_seconds(
     mode: str,
     tier: str,
@@ -384,6 +399,7 @@ def _make_decision(mode: str, report: dict[str, Any], aspect: str, resolution: s
         "block_cache": settings["block_cache"],
         "workflow_template": "h3_w4a8_t2v",
         "hardware_tier": tier,
+        "launch_profile": launch_profile_for_tier(tier),
     }, warnings
 
 
@@ -414,6 +430,7 @@ def build_plan(
     megapixels: float | None = None,
     paths: dict[str, str] | None = None,
     timing_file: str | Path | None = None,
+    reference_mode: str = "T2VA",
 ) -> dict[str, Any]:
     """Return a conservative generation plan and alternatives."""
     requested_mode = (mode or "auto").lower()
@@ -421,6 +438,9 @@ def build_plan(
         raise ValueError("mode must be auto, fast, balanced, or quality")
     if video_seconds <= 0 or fps <= 0:
         raise ValueError("video_seconds and fps must be positive")
+    reference_route = str(reference_mode or "T2VA").upper()
+    if reference_route not in {"T2VA", "I2VA", "FL2VA", "L2VA", "REF2VA"}:
+        raise ValueError("reference_mode must be T2VA, I2VA, FL2VA, L2VA, or REF2VA")
     had_explicit_resolution = resolution is not None
     resolution = _resolve_megapixel_override(aspect=aspect, megapixels=megapixels, resolution=resolution)
 
@@ -444,6 +464,7 @@ def build_plan(
             frames,
             fps,
             candidate_decision["steps"],
+            reference_mode=reference_route,
         )
         calibrated = empirical_estimate(timing, candidate_key, fallback_lower, fallback_upper)
         if calibrated:
@@ -498,6 +519,7 @@ def build_plan(
             "video_seconds": video_seconds,
             "fps": fps,
             "frames": frames,
+            "reference_mode": reference_route,
         },
         "hardware": {
             "tier": tier,
@@ -512,6 +534,7 @@ def build_plan(
             "explicit_resolution": had_explicit_resolution,
             "explicit_megapixels": megapixels is not None,
             "confirmation_required": False,
+            "reference_mode": reference_route,
         },
         "estimate": {
             "lower_seconds": lower,
@@ -566,6 +589,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-node-scan", action="store_true")
     parser.add_argument("--report-file", help="also save the JSON plan for preflight reuse")
     parser.add_argument("--timing-file", help="optional empirical timing cache; defaults beside --doctor-json")
+    parser.add_argument("--reference-mode", choices=["t2va", "i2va", "fl2va", "l2va", "ref2va"], default="t2va")
     parser.add_argument("--json", action="store_true")
     return parser.parse_args()
 
@@ -614,6 +638,7 @@ def main() -> int:
             megapixels=args.megapixels,
             paths=paths,
             timing_file=timing_file,
+            reference_mode=args.reference_mode,
         )
         if args.report_file:
             plan_path = Path(args.report_file).expanduser().resolve()

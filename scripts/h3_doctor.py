@@ -275,6 +275,7 @@ NODE_REQUIREMENTS = {
     "clipproj_node": ["ComfyUI-ClipProj", "ClipProj"],
     "h3_turbo": ["ComfyUI-MiniMax-H3-Turbo", "MiniMax-H3-Turbo"],
     "sol_attention": ["ComfyUI-sol-attn", "sol-attn"],
+    "sage_attention": ["ComfyUI_NVIDIA_RTX_Nodes", "NVIDIA_RTX_Nodes", "SageAttention", "sage-attn"],
     "block_cache": ["comfyui-minimax-h3-blockcache-T8", "blockcache-T8", "blockcache"],
 }
 

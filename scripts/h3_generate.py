@@ -39,18 +39,99 @@ COMPONENT_SETS = {
     },
 }
 
+COMPONENT_INTEGRITY = {
+    "portable-16gb-b": {
+        "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors": {
+            "bytes": 12_540_858_008,
+            "sha256": "01aa7b92c007c599890461c325f9b7e3c96fb06c36f242f95b62f7f20e538dec",
+        },
+        "qwen3vl_4b_fp8_scaled.safetensors": {
+            "bytes": 5_242_467_968,
+            "sha256": "54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094",
+        },
+        "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors": {
+            "bytes": 298_177_224,
+            "sha256": "1b85da614014024a0c9507f12558917dcc69b6adb564e716324594f401723115",
+        },
+    },
+}
 
-def resolve_model_overrides(workflow: dict[str, Any], comfyui: Path | None) -> dict[str, str]:
-    """Switch only to a complete registered component set.
 
-    Independent filename matching can silently combine an incompatible W4A8
-    checkpoint, encoder, and Turbo LoRA. Keep those three roles atomic.
-    """
-    if comfyui is None or not comfyui.exists():
-        return {}
-    roots = [root for root in (comfyui / "models", comfyui / "custom_nodes") if root.exists()]
-    candidates = [path for root in roots for path in root.rglob("*.safetensors")]
-    available = {path.name for path in candidates}
+COMPONENT_SET_ALIASES = {
+    "auto": "auto",
+    "a": "validated-low-vram-a",
+    "set-a": "validated-low-vram-a",
+    "validated-low-vram-a": "validated-low-vram-a",
+    "b": "portable-16gb-b",
+    "set-b": "portable-16gb-b",
+    "portable-16gb-b": "portable-16gb-b",
+}
+
+
+def normalize_component_set(value: str | None) -> str:
+    """Return a canonical component-set ID while keeping short aliases useful."""
+    key = (value or "auto").strip().lower()
+    try:
+        return COMPONENT_SET_ALIASES[key]
+    except KeyError as exc:
+        choices = ", ".join(sorted(COMPONENT_SET_ALIASES))
+        raise ValueError(f"unknown component set {value!r}; choose one of: {choices}") from exc
+
+
+def component_set_candidates(available_names: set[str]) -> list[str]:
+    """List registered sets whose three atomic model roles are all present."""
+    return [
+        set_name
+        for set_name, component_set in COMPONENT_SETS.items()
+        if all(component_set[field] in available_names for field in ("unet_name", "clip_name", "lora_name"))
+    ]
+
+
+def verify_component_integrity(comfyui: Path, component_set: str) -> dict[str, object]:
+    """Verify known fragile component files once, then reuse a size/mtime cache."""
+    requirements = COMPONENT_INTEGRITY.get(component_set, {})
+    if not requirements:
+        return {"component_set": component_set, "verified": True, "files": []}
+    model_root = comfyui / "models"
+    paths = {path.name: path for path in model_root.rglob("*.safetensors")}
+    cache_path = comfyui / "user" / "h3lite_runs" / "_environment" / "component_integrity.json"
+    try:
+        cache = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        cache = {"files": {}}
+    cached_files = cache.setdefault("files", {})
+    results: list[dict[str, object]] = []
+    for name, expected in requirements.items():
+        path = paths.get(name)
+        if path is None:
+            raise RuntimeError(f"component integrity check cannot find {name}")
+        stat = path.stat()
+        if stat.st_size != expected["bytes"]:
+            raise RuntimeError(f"component size mismatch for {name}: {stat.st_size} != {expected['bytes']}")
+        cached = cached_files.get(str(path.resolve()), {})
+        valid_cache = (
+            cached.get("bytes") == stat.st_size
+            and cached.get("mtime_ns") == stat.st_mtime_ns
+            and cached.get("sha256") == expected["sha256"]
+        )
+        digest = expected["sha256"] if valid_cache else _sha256_file(path)
+        if digest != expected["sha256"]:
+            raise RuntimeError(
+                f"component SHA-256 mismatch for {name}: {digest}; expected {expected['sha256']}"
+            )
+        cached_files[str(path.resolve())] = {
+            "bytes": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "sha256": digest,
+            "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        results.append({"path": str(path), "sha256": digest, "cache_reused": valid_cache})
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    cache_path.write_text(json.dumps(cache, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {"component_set": component_set, "verified": True, "files": results}
+
+
+def _workflow_model_fields(workflow: dict[str, Any]) -> dict[str, tuple[dict[str, Any], str]]:
     fields: dict[str, tuple[dict[str, Any], str]] = {}
     for node in workflow.values():
         if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
@@ -58,29 +139,87 @@ def resolve_model_overrides(workflow: dict[str, Any], comfyui: Path | None) -> d
         for field in ("unet_name", "clip_name", "lora_name"):
             if isinstance(node["inputs"].get(field), str):
                 fields[field] = (node, str(node["inputs"][field]))
+    return fields
+
+
+def resolve_model_overrides(
+    workflow: dict[str, Any],
+    comfyui: Path | None,
+    component_set: str = "auto",
+) -> dict[str, str]:
+    """Switch only to a complete registered component set.
+
+    Independent filename matching can silently combine an incompatible W4A8
+    checkpoint, encoder, and Turbo LoRA. Keep those three roles atomic. An
+    explicit component set is authoritative; auto mode only substitutes when
+    exactly one complete registered set is available.
+    """
+    requested = normalize_component_set(component_set)
+    fields = _workflow_model_fields(workflow)
     if not fields:
+        return {"component_set": requested} if requested != "auto" else {}
+    if comfyui is None or not comfyui.exists():
+        if requested != "auto":
+            raise RuntimeError(f"--component-set {requested} requires an existing --comfyui path")
         return {}
-    if all(configured in available for _, configured in fields.values()):
+    roots = [root for root in (comfyui / "models", comfyui / "custom_nodes") if root.exists()]
+    candidates = [path for root in roots for path in root.rglob("*.safetensors")]
+    available = {path.name for path in candidates}
+    installed_sets = component_set_candidates(available)
+
+    if requested == "auto" and len(installed_sets) > 1:
+        raise RuntimeError(
+            "multiple registered component sets match: "
+            + ", ".join(installed_sets)
+            + "; choose --component-set explicitly"
+        )
+
+    if requested != "auto":
+        selected = COMPONENT_SETS[requested]
+        missing = [selected[field] for field in fields if selected[field] not in available]
+        if missing:
+            raise RuntimeError(
+                f"component set {requested} is incomplete; missing: {', '.join(missing)}"
+            )
+        overrides: dict[str, str] = {"component_set": requested}
+        for field, (node, configured) in fields.items():
+            replacement = selected[field]
+            if configured != replacement:
+                node["inputs"][field] = replacement
+                overrides[f"{field}:{configured}"] = replacement
+        return overrides
+
+    configured = {field: value for field, (_, value) in fields.items()}
+    if all(value in available for value in configured.values()):
+        configured_matches = [
+            set_name
+            for set_name, selected in COMPONENT_SETS.items()
+            if all(field in selected and selected[field] == configured[field] for field in configured)
+        ]
+        if configured_matches:
+            return {"component_set": configured_matches[0]}
         return {}
 
-    matches = [
-        (set_name, component_set)
-        for set_name, component_set in COMPONENT_SETS.items()
-        if all(component_set.get(field) in available for field in fields)
-    ]
+    matches = [(set_name, COMPONENT_SETS[set_name]) for set_name in installed_sets]
     if len(matches) != 1:
         missing = [configured for _, configured in fields.values() if configured not in available]
-        detail = "no complete registered component set is installed" if not matches else "multiple registered component sets match"
-        raise RuntimeError(f"missing configured model files: {', '.join(missing)}; {detail}; choose a component set explicitly")
+        detail = (
+            "no complete registered component set is installed"
+            if not matches
+            else "multiple registered component sets match"
+        )
+        raise RuntimeError(
+            f"missing configured model files: {', '.join(missing)}; {detail}; "
+            "choose --component-set explicitly"
+        )
 
     set_name, selected = matches[0]
-    overrides: dict[str, str] = {}
+    overrides = {"component_set": set_name}
     for field, (node, configured) in fields.items():
         replacement = selected[field]
         if configured != replacement:
             node["inputs"][field] = replacement
             overrides[f"{field}:{configured}"] = replacement
-    overrides["component_set"] = set_name
     return overrides
 
 
@@ -123,6 +262,8 @@ def default_workflow_path(template: str) -> Path:
     templates = {
         "h3_w4a8_t2v": skill_root / "assets" / "h3_w4a8_t2v_api.json",
         "h3_w4a8_t2v_compat": skill_root / "assets" / "h3_w4a8_t2v_compat_api.json",
+        "h3_w4a8_i2v": skill_root / "assets" / "h3_w4a8_i2v_api.json",
+        "h3_w4a8_i2v_compat": skill_root / "assets" / "h3_w4a8_i2v_compat_api.json",
     }
     try:
         path = templates[template]
@@ -131,6 +272,187 @@ def default_workflow_path(template: str) -> Path:
     if not path.exists():
         raise RuntimeError(f"Bundled workflow template is missing: {path}")
     return path
+
+
+def _is_node_reference(value: Any) -> bool:
+    return isinstance(value, list) and len(value) >= 2 and value[0] is not None
+
+
+def reference_mode(workflow: dict[str, Any]) -> str:
+    """Infer the H3 reference route from connected first/last frame inputs."""
+    has_first = False
+    has_last = False
+    for node in workflow.values():
+        if not isinstance(node, dict) or node.get("class_type") != "MiniMaxH3ImageToVideo":
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        has_first = has_first or _is_node_reference(inputs.get("first_frame"))
+        has_last = has_last or _is_node_reference(inputs.get("last_frame"))
+    if has_first and has_last:
+        return "FL2VA"
+    if has_first:
+        return "I2VA"
+    if has_last:
+        return "L2VA"
+    return "T2VA"
+
+
+def _reference_source(value: str | Path, comfyui: Path) -> Path:
+    """Resolve either a local path or a filename relative to ComfyUI/input."""
+    raw = str(value).strip()
+    candidate = normalize_windows_path(raw)
+    if candidate.is_file():
+        return candidate.resolve()
+    input_candidate = (comfyui / "input" / raw.replace("/", "\\")).resolve()
+    if input_candidate.is_file():
+        return input_candidate
+    raise RuntimeError(f"reference image does not exist: {value}")
+
+
+def _stage_reference_image(value: str | Path, comfyui: Path, *, stage: bool) -> dict[str, Any]:
+    """Make a reference image visible to ComfyUI without clobbering user files."""
+    source = _reference_source(value, comfyui)
+    if source.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+        raise RuntimeError(f"unsupported reference image format: {source.suffix or source.name}")
+    input_dir = (comfyui / "input").resolve()
+    try:
+        relative = source.relative_to(input_dir)
+    except ValueError:
+        relative = None
+    digest = _sha256_file(source)
+    if digest is None:
+        raise RuntimeError(f"cannot read reference image: {source}")
+    if relative is not None:
+        input_name = str(relative).replace("\\", "/")
+        staged = False
+    else:
+        input_name = f"h3lite_{digest[:12]}_{source.name}"
+        destination = input_dir / input_name
+        staged = True
+        if stage:
+            input_dir.mkdir(parents=True, exist_ok=True)
+            if destination.exists():
+                if _sha256_file(destination) != digest:
+                    raise RuntimeError(f"staged reference already exists with a different hash: {destination}")
+            else:
+                try:
+                    shutil.copy2(source, destination)
+                except OSError as exc:
+                    raise RuntimeError(f"cannot stage reference image into {input_dir}: {exc}") from exc
+    return {
+        "source": str(source),
+        "input_name": input_name,
+        "sha256": digest,
+        "staged": staged and stage,
+    }
+
+
+def _new_node_id(workflow: dict[str, Any]) -> str:
+    numeric_ids = []
+    for node_id in workflow:
+        try:
+            numeric_ids.append(int(str(node_id)))
+        except (TypeError, ValueError):
+            continue
+    candidate = max(numeric_ids, default=0) + 1
+    while str(candidate) in workflow:
+        candidate += 1
+    return str(candidate)
+
+
+def _bind_reference_field(
+    workflow: dict[str, Any],
+    h3_node: dict[str, Any],
+    field: str,
+    input_name: str,
+) -> None:
+    inputs = h3_node.setdefault("inputs", {})
+    existing = inputs.get(field)
+    if _is_node_reference(existing):
+        loader = workflow.get(str(existing[0]))
+        if isinstance(loader, dict) and loader.get("class_type") == "LoadImage":
+            loader_inputs = loader.setdefault("inputs", {})
+            loader_inputs["image"] = input_name
+            return
+    loader_id = _new_node_id(workflow)
+    workflow[loader_id] = {"inputs": {"image": input_name}, "class_type": "LoadImage"}
+    inputs[field] = [loader_id, 0]
+
+
+def _remove_placeholder_first_frame(workflow: dict[str, Any]) -> None:
+    """Turn the bundled I2V graph into L2VA when only a last frame is given."""
+    placeholder_loaders: set[str] = set()
+    for node in workflow.values():
+        if not isinstance(node, dict) or node.get("class_type") != "MiniMaxH3ImageToVideo":
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict) or not _is_node_reference(inputs.get("first_frame")):
+            continue
+        reference = inputs["first_frame"]
+        loader = workflow.get(str(reference[0]))
+        loader_inputs = loader.get("inputs") if isinstance(loader, dict) else None
+        if isinstance(loader, dict) and loader.get("class_type") == "LoadImage" and isinstance(loader_inputs, dict) and loader_inputs.get("image") == "__H3_FIRST_FRAME__":
+            inputs.pop("first_frame", None)
+            placeholder_loaders.add(str(reference[0]))
+    for loader_id in placeholder_loaders:
+        still_used = any(
+            isinstance(node, dict)
+            and isinstance(node.get("inputs"), dict)
+            and any(_is_node_reference(value) and str(value[0]) == loader_id for value in node["inputs"].values())
+            for node in workflow.values()
+        )
+        if not still_used:
+            workflow.pop(loader_id, None)
+
+
+def bind_reference_images(
+    workflow: dict[str, Any],
+    *,
+    first_frame: str | Path | None,
+    last_frame: str | Path | None,
+    comfyui: Path | None,
+    stage: bool,
+) -> dict[str, Any]:
+    """Bind CLI frame paths to native MiniMaxH3ImageToVideo inputs."""
+    requested = {"first_frame": first_frame, "last_frame": last_frame}
+    if not any(value is not None for value in requested.values()):
+        return {"mode": reference_mode(workflow), "inputs": {}}
+    if comfyui is None:
+        raise RuntimeError("--comfyui is required when --first-frame or --last-frame is used")
+    if first_frame is None and last_frame is not None:
+        _remove_placeholder_first_frame(workflow)
+    h3_nodes = [
+        node
+        for node in workflow.values()
+        if isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ImageToVideo"
+    ]
+    if not h3_nodes:
+        raise RuntimeError("the workflow has no MiniMaxH3ImageToVideo node for reference frames")
+    bindings: dict[str, Any] = {}
+    for field, value in requested.items():
+        if value is None:
+            continue
+        binding = _stage_reference_image(value, comfyui, stage=stage)
+        for node in h3_nodes:
+            _bind_reference_field(workflow, node, field, binding["input_name"])
+        bindings[field] = binding
+    return {"mode": reference_mode(workflow), "inputs": bindings}
+
+
+def validate_reference_placeholders(workflow: dict[str, Any]) -> None:
+    """Fail early when a bundled reference template was used without its frame."""
+    placeholders = {
+        "__H3_FIRST_FRAME__": "--first-frame",
+        "__H3_LAST_FRAME__": "--last-frame",
+    }
+    for node in workflow.values():
+        if not isinstance(node, dict) or node.get("class_type") != "LoadImage":
+            continue
+        image = node.get("inputs", {}).get("image") if isinstance(node.get("inputs"), dict) else None
+        if image in placeholders:
+            raise RuntimeError(f"this workflow requires {placeholders[image]} to be supplied")
 
 
 PROFILE_STEPS = {
@@ -198,7 +520,7 @@ def config_fingerprint(workflow: dict[str, Any], prompt: str) -> str:
 
 def effective_workflow_settings(workflow: dict[str, Any]) -> dict[str, Any]:
     """Extract the settings that matter for later media verification."""
-    settings: dict[str, Any] = {}
+    settings: dict[str, Any] = {"reference_mode": reference_mode(workflow)}
     cache_ids = {
         str(node_id)
         for node_id, node in workflow.items()
@@ -326,6 +648,7 @@ def create_run_manifest(
     audio_policy: str,
     fingerprint: str,
     model_overrides: dict[str, str] | None = None,
+    reference_inputs: dict[str, Any] | None = None,
 ) -> tuple[Path | None, dict[str, Any]]:
     if run_root is None:
         return None, {}
@@ -347,6 +670,10 @@ def create_run_manifest(
         "workflow_snapshot": str(workflow_snapshot),
         "prompt_path": str(prompt_path),
         "target": target,
+        "reference_mode": effective_workflow_settings(workflow).get("reference_mode"),
+        "first_frame": getattr(args, "first_frame", None),
+        "last_frame": getattr(args, "last_frame", None),
+        "reference_inputs": reference_inputs or {},
         "profile": args.profile,
         "audio_policy": audio_policy,
         "seed": args.seed,
@@ -754,14 +1081,26 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
     parser.add_argument("--workflow", help="ComfyUI API-format workflow JSON")
-    parser.add_argument("--workflow-template", default="h3_w4a8_t2v", choices=["h3_w4a8_t2v", "h3_w4a8_t2v_compat"], help="bundled workflow used when --workflow is omitted")
+    parser.add_argument(
+        "--workflow-template",
+        default="h3_w4a8_t2v",
+        choices=["h3_w4a8_t2v", "h3_w4a8_t2v_compat", "h3_w4a8_i2v", "h3_w4a8_i2v_compat"],
+        help="bundled workflow used when --workflow is omitted",
+    )
     prompt_group = parser.add_mutually_exclusive_group(required=True)
     prompt_group.add_argument("--prompt-file", help="UTF-8 text file containing the H3 prompt")
     prompt_group.add_argument("--prompt-text", help="prompt text supplied directly on the command line")
     parser.add_argument("--prompt-node", help="node id whose prompt input should be replaced")
     parser.add_argument("--prompt-field", help="input field on the prompt node, such as prompt or text")
+    parser.add_argument("--first-frame", help="local first-frame image; binds MiniMaxH3ImageToVideo.first_frame")
+    parser.add_argument("--last-frame", help="local last-frame image; binds MiniMaxH3ImageToVideo.last_frame")
     parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
     parser.add_argument("--comfyui", help="ComfyUI root used by --resolve-models")
+    parser.add_argument(
+        "--component-set",
+        default="auto",
+        help="registered model set: auto, A/validated-low-vram-a, or B/portable-16gb-b",
+    )
     parser.add_argument("--filename-prefix", help="override SaveVideo filename_prefix")
     parser.add_argument("--profile", choices=["fast", "balanced", "quality"], default="fast", help="generation intent; fast is the validated default")
     parser.add_argument("--seed", type=int, help="override RandomNoise noise_seed")
@@ -806,7 +1145,20 @@ def main() -> int:
     try:
         workflow_path = normalize_windows_path(args.workflow).resolve() if args.workflow else default_workflow_path(args.workflow_template)
         workflow = load_workflow(workflow_path)
-        model_overrides = resolve_model_overrides(workflow, normalize_windows_path(args.comfyui).resolve() if args.comfyui else None) if args.resolve_models else {}
+        comfyui_path = normalize_windows_path(args.comfyui).resolve() if args.comfyui else None
+        output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else None
+        if comfyui_path is None and output_dir is not None and output_dir.name.lower() == "output":
+            comfyui_path = output_dir.parent
+        requested_component_set = normalize_component_set(getattr(args, "component_set", "auto"))
+        model_overrides = (
+            resolve_model_overrides(workflow, comfyui_path, requested_component_set)
+            if args.resolve_models or requested_component_set != "auto"
+            else {}
+        )
+        selected_component_set = model_overrides.get("component_set")
+        component_integrity = None
+        if selected_component_set and comfyui_path is not None:
+            component_integrity = verify_component_integrity(comfyui_path, selected_component_set)
         apply_profile(workflow, args.profile)
         if args.resolution:
             width, height = parse_resolution(args.resolution)
@@ -820,21 +1172,32 @@ def main() -> int:
         target = choose_prompt_target(workflow, args.prompt_node, args.prompt_field)
         workflow[str(target["node"])]["inputs"][str(target["field"])] = prompt
         apply_overrides(workflow, args)
+        reference_inputs = bind_reference_images(
+            workflow,
+            first_frame=args.first_frame,
+            last_frame=args.last_frame,
+            comfyui=comfyui_path,
+            stage=not args.dry_run,
+        )
+        validate_reference_placeholders(workflow)
+        resolved_reference_mode = str(reference_inputs["mode"])
         resolved_audio_policy = apply_audio_policy(workflow, prompt, args.audio_policy)
         if args.dry_run:
             result = {
                 "dry_run": True,
                 "workflow_path": str(workflow_path),
                 "target": target,
+                "reference_inputs": reference_inputs,
                 "audio_policy": resolved_audio_policy,
                 "config_fingerprint": config_fingerprint(workflow, prompt),
                 "effective_settings": effective_workflow_settings(workflow),
+                "component_set": selected_component_set,
+                "model_overrides": model_overrides,
                 "workflow": workflow,
             }
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
 
-        output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else None
         run_root = normalize_windows_path(args.run_root).resolve() if args.run_root else default_run_root(output_dir)
         fingerprint = config_fingerprint(workflow, prompt)
         if not args.allow_duplicate:
@@ -846,6 +1209,7 @@ def main() -> int:
                     "deduplicated": True,
                     "prompt_id": existing.get("prompt_id"),
                     "run_manifest": existing.get("manifest_path"),
+                    "reference_mode": resolved_reference_mode,
                     "config_fingerprint": fingerprint,
                     "message": "an identical configuration is already queued or running; submission skipped",
                 }
@@ -865,6 +1229,7 @@ def main() -> int:
                         "deduplicated": True,
                         "prompt_id": existing.get("prompt_id"),
                         "run_manifest": existing.get("manifest_path"),
+                        "reference_mode": resolved_reference_mode,
                         "config_fingerprint": fingerprint,
                         "message": "matching task is already queued or running",
                     }
@@ -885,7 +1250,10 @@ def main() -> int:
             audio_policy=resolved_audio_policy,
             fingerprint=fingerprint,
             model_overrides=model_overrides,
+            reference_inputs=reference_inputs,
         )
+        if component_integrity is not None:
+            update_manifest(manifest_path, {"component_integrity": component_integrity})
         client_id = str(uuid.uuid4())
         try:
             queued = json_request(args.base_url, "/prompt", method="POST", payload={"prompt": workflow, "client_id": client_id})
@@ -913,8 +1281,10 @@ def main() -> int:
                 "client_id": client_id,
                 "workflow_path": str(workflow_path),
                 "target": target,
+                "reference_mode": resolved_reference_mode,
                 "audio_policy": resolved_audio_policy,
                 "config_fingerprint": fingerprint,
+                "component_set": selected_component_set,
                 "run_manifest": str(manifest_path) if manifest_path else None,
                 "queued_at_utc": started_at.isoformat(),
             }
@@ -964,12 +1334,22 @@ def main() -> int:
                 "prompt_id": prompt_id,
                 "client_id": client_id,
                 "target": target,
+                "reference_mode": resolved_reference_mode,
                 "audio_policy": resolved_audio_policy,
                 "config_fingerprint": fingerprint,
                 "run_manifest": str(manifest_path) if manifest_path else None,
                 "watch": True,
                 "status": compact_result(status_result),
             }
+            update_manifest(
+                manifest_path,
+                {
+                    "state": status_result.get("state", "verification_failed"),
+                    "elapsed_seconds": status_result.get("elapsed_seconds"),
+                    "outputs": status_result.get("outputs", []),
+                    "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                },
+            )
             if args.json:
                 print(json.dumps(result, ensure_ascii=False, indent=2))
             else:
@@ -993,6 +1373,7 @@ def main() -> int:
             "prompt_id": prompt_id,
             "client_id": client_id,
             "target": target,
+            "reference_mode": resolved_reference_mode,
             "started_at_utc": started_at.isoformat(),
             "elapsed_seconds": round(time.monotonic() - started, 2),
             "comfyui_execution_seconds": execution_elapsed_seconds(record),

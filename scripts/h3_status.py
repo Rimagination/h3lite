@@ -59,6 +59,50 @@ def analyze_frame_samples(samples: list[bytes]) -> dict[str, object]:
     }
 
 
+def analyze_rgb_frame_samples(samples: list[bytes], size: int = 64) -> dict[str, object]:
+    """Detect the high-chroma spatial discontinuity seen in broken H3 decodes."""
+    metrics: list[dict[str, float]] = []
+    for sample in samples:
+        if len(sample) != size * size * 3:
+            continue
+        pixels = [sample[index : index + 3] for index in range(0, len(sample), 3)]
+        extreme_chroma = sum(
+            1 for pixel in pixels if max(pixel) - min(pixel) >= 160 and max(pixel) >= 220
+        ) / len(pixels)
+        saturated = sum(1 for pixel in pixels if max(pixel) - min(pixel) >= 100) / len(pixels)
+        neighbor_deltas: list[float] = []
+        for y in range(size):
+            for x in range(size - 1):
+                left, right = pixels[y * size + x], pixels[y * size + x + 1]
+                neighbor_deltas.append(sum(abs(left[channel] - right[channel]) for channel in range(3)) / 3)
+        for y in range(size - 1):
+            for x in range(size):
+                top, bottom = pixels[y * size + x], pixels[(y + 1) * size + x]
+                neighbor_deltas.append(sum(abs(top[channel] - bottom[channel]) for channel in range(3)) / 3)
+        abrupt = sum(value >= 70 for value in neighbor_deltas) / len(neighbor_deltas)
+        metrics.append(
+            {
+                "extreme_chroma_fraction": extreme_chroma,
+                "saturated_fraction": saturated,
+                "abrupt_neighbor_fraction": abrupt,
+            }
+        )
+    suspicious = sum(
+        item["extreme_chroma_fraction"] >= 0.06
+        and item["saturated_fraction"] >= 0.20
+        and item["abrupt_neighbor_fraction"] >= 0.08
+        for item in metrics
+    )
+    return {
+        "classification": "suspected_mosaic" if suspicious >= 2 else "coherent_color",
+        "sample_count": len(metrics),
+        "suspicious_sample_count": suspicious,
+        "frame_metrics": [
+            {key: round(value, 3) for key, value in item.items()} for item in metrics
+        ],
+    }
+
+
 def extract_gray_frame(path: Path, timestamp: float, size: int = 64) -> bytes | None:
     executable = shutil.which("ffmpeg")
     if not executable or not path.exists():
@@ -89,14 +133,50 @@ def extract_gray_frame(path: Path, timestamp: float, size: int = 64) -> bytes | 
     return completed.stdout if completed.returncode == 0 and completed.stdout else None
 
 
+def extract_rgb_frame(path: Path, timestamp: float, size: int = 64) -> bytes | None:
+    executable = shutil.which("ffmpeg")
+    if not executable or not path.exists():
+        return None
+    command = [
+        executable,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{max(0.0, timestamp):.3f}",
+        "-i",
+        str(path),
+        "-frames:v",
+        "1",
+        "-vf",
+        f"scale={size}:{size}:force_original_aspect_ratio=decrease,pad={size}:{size}:(ow-iw)/2:(oh-ih)/2,format=rgb24",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "rgb24",
+        "pipe:1",
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return completed.stdout if completed.returncode == 0 and completed.stdout else None
+
+
 def dynamic_video_quality(path: Path, duration: float | None) -> dict[str, object]:
     if duration is None or duration <= 0:
         return {"classification": "unavailable", "error": "video duration is unavailable"}
     timestamps = [0.0, max(0.01, duration / 2), max(0.01, duration - 0.05)]
     samples = [extract_gray_frame(path, timestamp) for timestamp in timestamps]
-    if any(sample is None for sample in samples):
+    rgb_samples = [extract_rgb_frame(path, timestamp) for timestamp in timestamps]
+    if any(sample is None for sample in samples) or any(sample is None for sample in rgb_samples):
         return {"classification": "unavailable", "error": "ffmpeg could not extract all QA frames", "timestamps": timestamps}
     result = analyze_frame_samples([sample for sample in samples if sample is not None])
+    color_result = analyze_rgb_frame_samples([sample for sample in rgb_samples if sample is not None])
+    result["motion_classification"] = result["classification"]
+    result["color_qa"] = color_result
+    if color_result["classification"] == "suspected_mosaic":
+        result["classification"] = "suspected_mosaic"
     result["timestamps"] = timestamps
     return result
 
