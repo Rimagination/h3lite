@@ -42,21 +42,57 @@ https://github.com/Rimagination/h3lite
 
 不想使用 agent 时，可以打开 [H3 Lite repository](https://github.com/Rimagination/h3lite)，选择 **Code → Download ZIP**，解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
 
-### 生成一个 5s 的视频
+### 快速验证
 
-安装完成后，直接发送这句中文提示词：
-
-```text
-请使用 H3 Lite，生成一个 5 秒横屏视频：雨夜窗边，一只橘猫轻轻打哈欠，镜头慢慢推近，写实电影感。不要对白，但保留雨声和室内环境声。
-```
-
-你也可以指定画布：
+这是我们最早验证成功的快速生成案例。它依次写清了画面风格、球的动作与固定镜头，以及撞击和滚动声。安装完成后，可以直接发送：
 
 ```text
-请使用 H3 Lite，生成一个 5 秒横屏视频，分辨率为 864×480：雨夜窗边，一只柯基轻轻打哈欠，镜头慢慢推近，写实电影感。不要对白，但保留雨声。
+请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
 ```
 
 不需要自己填写模型名称、节点名称、采样步数或 ComfyUI 工作流。`H3 Lite` 会根据电脑和要求决定这些细节。
+
+### 以规范的提示词生成视频
+
+下面三个想法化用自 MiniMax H3 的[可复现 768p 案例](https://github.com/MiniMax-AI/MiniMax-H3#reproducible-768p-cases)。直接把自然语言提示词交给 H3 Lite 即可；实际分辨率会根据电脑配置和你的明确要求决定。
+
+#### 三段式提示案例
+
+规范的短视频提示词可以按三段式来写：
+
+1. **画面与氛围**：主体在哪里，光线、景别和风格是什么。
+2. **动作与镜头**：主体发生什么变化，镜头怎样运动。
+3. **声音**：环境声、动作声、音乐或对白；“不要对白”不等于静音。
+
+**星舰跃迁（T2VA，8 秒）**
+
+```text
+请使用 H3 Lite，生成一个 8 秒 16:9 视频：昏暗而宽阔的星舰舰桥内，一位短发女舰长背对镜头站在弧形观察窗前，窗外的深紫色星云中排列着庞大的黑色舰队。镜头先缓慢推近，舰队尾部的蓝色引擎逐渐增强；约 3.5 秒时切到舰长面部特写，舰队突然跃迁，强烈白光淹没舰桥，冲击使镜头剧烈震动，舰长踉跄后重新站稳。白光消退，窗外只剩空旷星云，她缓缓闭上眼睛。保留舰桥低沉嗡鸣、引擎蓄能声、跃迁爆响和金属震动声，配以逐渐增强的太空歌剧管弦乐。
+```
+
+#### 图生视频
+
+**拉面与家宴（I2VA，8 秒）**
+
+先下载或直接附上 MiniMax 官方案例的[拉面首帧图](assets/examples/minimax-official-i2va-ramen-first-frame.png)，明确将它指定为视频第一帧，然后发送：
+
+![MiniMax H3 官方 I2VA 拉面首帧](assets/examples/minimax-official-i2va-ramen-first-frame.png)
+
+```text
+请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 8 秒视频，并保持图片中的人物、拉面、餐桌和房间构图。镜头全程固定：开始时让前景的青花瓷拉面碗、叉烧、葱花和升腾的热气清晰可见，背景中的家人保持柔和虚化；随后平稳地把焦点从拉面转移到家人，拉面逐渐虚化，家人的笑容、夹菜和轻微交谈动作变得清晰，热气始终在前景飘动。保留汤汁轻微沸腾声、碗筷碰撞声和温暖的室内环境声，加入轻柔的原声吉他与古筝音乐，不要清晰对白。
+```
+
+#### 视频与声音参考
+
+**粉色西装与黑羊（Ref2VA，5 秒）**
+
+先下载 MiniMax 官方案例的[参考视频](assets/examples/minimax-official-ref2va-pink-suit-black-lamb.mp4)和[男声音色参考](assets/examples/minimax-official-ref2va-voice-reference.mp3)，再在同一条消息中附上这两份素材。参考视频已经包含原有背景音乐和环境声，单独的音频只用于参考男声音色。然后发送：
+
+```text
+请使用 H3 Lite，根据我在这条消息中附上的参考视频和男声音频生成一个 5 秒视频：以参考视频作为画面、动作和背景音轨基础，保留金发男子、亮粉色西装、怀中的黑色小羊、夕阳草地、远处白羊以及原有镜头构图；只参考单独男声音频的音色来生成新对白。男子看向镜头自然说：“跟着风，自由生活。”说完后露出轻松的微笑，望向远处，并轻轻抚摸黑羊的毛，镜头缓慢推近。人物口型与中文对白同步，其余画面保持写实自然。
+```
+
+以上素材来自 MiniMax H3 官方可复现案例的输入文件；来源 URL 和校验值记录在 [`assets/examples/sources.json`](assets/examples/sources.json)。I2VA 和 Ref2VA 需要相应的图片、视频或音频工作流；如果当前安装只有默认文本生成路线，H3 Lite 会先说明并引导配置缺少的模式。
 
 ### 默认路线和电脑要求
 
@@ -113,11 +149,55 @@ To choose the installation location, say:
 Put ComfyUI at F:\MiniMax-H3\ComfyUI. Reuse it if it is already healthy.
 ```
 
-### Generate a 5-second video
+### Quick validation
+
+This is the first fast-generation example we successfully validated. After installation, send:
 
 ```text
-Use H3 Lite to generate a 5-second landscape video of an orange cat yawning beside a rainy window at night. The camera slowly pushes in. Photorealistic cinematic style. No dialogue, but keep the rain and indoor room tone.
+Use H3 Lite to generate a 5-second landscape video. A small matte red rubber ball bounces twice on grey concrete, then rolls out of frame to the right. Use a locked-off low-angle camera, cold overcast daylight, shallow depth of field, and a 35mm cinematic look. Keep the sounds of the ball striking the ground twice and rolling across the concrete. No music.
 ```
+
+### Generate video with structured prompts
+
+These prompts are adapted from MiniMax H3's [reproducible 768p cases](https://github.com/MiniMax-AI/MiniMax-H3#reproducible-768p-cases). H3 Lite chooses the actual resolution from the machine and any explicit canvas request.
+
+#### Three-part prompt example
+
+Use a simple three-part structure:
+
+1. **Scene and atmosphere**: subject, setting, lighting, framing, and style.
+2. **Action and camera**: what changes and how the camera moves.
+3. **Sound**: ambience, action sounds, music, or dialogue; “no dialogue” does not mean silence.
+
+**Starship jump (T2VA, 8 seconds)**
+
+```text
+Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a starship, a short-haired female captain stands with her back to the camera before a curved observation window. A massive dark fleet waits against a deep-purple nebula. The camera slowly pushes in as the fleet's blue engines intensify. At about 3.5 seconds, cut to a close-up of the captain. The fleet suddenly jumps to hyperspace; a white flash floods the bridge, the camera shakes violently, and the captain staggers before bracing herself. As the light fades, only the empty nebula remains and she slowly closes her eyes. Keep the low bridge hum, rising engine whine, hyperspace boom, and metallic vibration, with a swelling space-opera orchestral score.
+```
+
+#### Image to video
+
+**Ramen family dinner (I2VA, 8 seconds)**
+
+Download or directly attach MiniMax's official [ramen first frame](assets/examples/minimax-official-i2va-ramen-first-frame.png), designate it as the video's first frame, and then send:
+
+![Official MiniMax H3 I2VA ramen first frame](assets/examples/minimax-official-i2va-ramen-first-frame.png)
+
+```text
+Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate an 8-second video while preserving its people, ramen, table, room, and composition. Keep the camera static. Begin with the blue-and-white ramen bowl, chashu, scallions, and rising steam in crisp foreground focus while the family remains softly blurred. Smoothly rack focus from the ramen to the family: the bowl softens, their smiles and small dining gestures become clear, and steam continues drifting through the foreground. Keep the quiet broth simmer, ceramic and chopstick clinks, and warm room tone. Add gentle acoustic guitar and koto music, with no intelligible dialogue.
+```
+
+#### Video and audio reference
+
+**Pink suit and black lamb (Ref2VA, 5 seconds)**
+
+Download MiniMax's official [reference video](assets/examples/minimax-official-ref2va-pink-suit-black-lamb.mp4) and [male voice reference](assets/examples/minimax-official-ref2va-voice-reference.mp3), then attach both in the same message. The reference video already contains its original music and ambient audio; the separate audio file is used only as a male voice-timbre reference. Then send:
+
+```text
+Use H3 Lite to generate a 5-second video from the reference video and male voice sample attached to this message. Use the reference video as the visual, motion, and background-audio foundation, preserving the blond man, bright pink suit, black lamb in his arms, golden-hour pasture, distant white lambs, and original camera composition. Use only the separate male voice sample's timbre to generate new dialogue. Looking toward the camera, he naturally says, “Follow the wind, live free.” He then smiles peacefully, looks toward the horizon, and gently strokes the lamb as the camera slowly pushes in. Keep realistic motion and synchronize his lips to the English dialogue.
+```
+
+These files are the inputs referenced by MiniMax H3's official reproducible cases; their source URLs and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json). I2VA and Ref2VA require the corresponding image, video, or audio workflow. If the installation only has the default text-to-video route, H3 Lite explains what is missing and guides the user through configuring that mode.
 
 ### Default route and hardware
 

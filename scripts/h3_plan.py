@@ -24,6 +24,23 @@ BASE_PIXELS = 640 * 352
 BASE_FRAMES = 124
 TIMING_HISTORY_LIMIT = 8
 
+ASPECT_RATIOS = {
+    "square": (1, 1),
+    "portrait": (9, 16),
+    "landscape": (16, 9),
+}
+
+QUALITY_BUCKETS = {
+    # Mirrors ComfyUI's ResolutionSelector idea: aspect ratio + megapixels +
+    # 32-pixel multiple. The explicit fast override stays conservative for
+    # low-VRAM laptops; the bucket values are used for official-style canvases.
+    "smoke": 0.20,
+    "fast": 0.25,
+    "official": 0.40,
+    "balanced": 0.40,
+    "quality": 0.50,
+}
+
 
 def _as_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -38,17 +55,32 @@ def timing_key(
     frames: int,
     fps: float,
     steps: int,
+    variant: str | None = None,
 ) -> str:
     """Return a stable key for empirical timings from comparable runs."""
-    return "|".join(
-        (
+    parts = [
             str(profile),
             f"{int(resolution['width'])}x{int(resolution['height'])}",
             str(int(frames)),
             f"{float(fps):g}",
             str(int(steps)),
-        )
-    )
+    ]
+    if variant:
+        parts.append(str(variant))
+    return "|".join(parts)
+
+
+def timing_variant(settings: dict[str, Any]) -> str | None:
+    """Separate experimental LoRA/shift/cache timings from the default route."""
+    lora = str(settings.get("lora_name") or "")
+    block_cache = settings.get("block_cache")
+    shift_video = _as_float(settings.get("shift_video"), 12.0)
+    shift_audio = _as_float(settings.get("shift_audio"), 3.0)
+    default_lora = "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors"
+    if (not lora or lora == default_lora) and block_cache is not False and shift_video == 12.0 and shift_audio == 3.0:
+        return None
+    lora_tag = Path(lora).stem if lora else "unknown-lora"
+    return f"lora={lora_tag};cache={int(bool(block_cache))};sv={shift_video:g};sa={shift_audio:g}"
 
 
 def load_timing_history(path: str | Path | None) -> dict[str, Any]:
@@ -83,6 +115,7 @@ def record_timing_sample(run_root: str | Path | None, manifest_path: str | Path 
             int(settings["length"]),
             float(settings["fps"]),
             int(settings["steps"]),
+            timing_variant(settings),
         )
         root = Path(run_root).expanduser().resolve()
         timing_path = root / "_environment" / "timing.json"
@@ -164,8 +197,10 @@ def max_vram_gb(report: dict[str, Any]) -> float:
 
 def hardware_tier(report: dict[str, Any]) -> str:
     vram = max_vram_gb(report)
-    if vram < 7.5:
+    if vram < 5.5:
         return "blocked"
+    if vram < 7.5:
+        return "very-low"
     if vram < 10:
         return "low"
     if vram < 16:
@@ -206,20 +241,47 @@ def _orientation(value: str) -> str:
     return aliases[normalized]
 
 
+def resolution_from_bucket(aspect: str, megapixels: float, multiple: int = ALIGNMENT) -> dict[str, int]:
+    """Match ComfyUI's ResolutionSelector: aspect + MP target + aligned size."""
+    orientation = _orientation(aspect)
+    width_ratio, height_ratio = ASPECT_RATIOS[orientation]
+    total_pixels = float(megapixels) * 1024 * 1024
+    if total_pixels <= 0:
+        raise ValueError("megapixels must be positive")
+    scale = (total_pixels / (width_ratio * height_ratio)) ** 0.5
+    width = round(width_ratio * scale / multiple) * multiple
+    height = round(height_ratio * scale / multiple) * multiple
+    return {"width": max(multiple, width), "height": max(multiple, height)}
+
+
 def resolution_for(mode: str, tier: str, aspect: str) -> dict[str, int]:
     orientation = _orientation(aspect)
-    if orientation == "square":
-        side = 512 if tier == "low" else 640
-        return {"width": side, "height": side}
+    if tier == "very-low":
+        if orientation == "landscape":
+            return {"width": 608, "height": 352}
+        if orientation == "portrait":
+            return {"width": 352, "height": 608}
+        return {"width": 448, "height": 448}
+    if tier == "low":
+        if mode == "fast":
+            if orientation == "landscape":
+                return {"width": 640, "height": 352}
+            if orientation == "portrait":
+                return {"width": 352, "height": 640}
+            return {"width": 512, "height": 512}
+        # On 8 GB laptops, spend non-fast intent on more steps before canvas.
+        # This keeps quality/balanced in the known-success envelope.
+        return resolution_for("fast", tier, orientation)
 
-    # 864x480 is the documented post-smoke-test canvas. Keep 8 GB laptops at
-    # the 640x352 canvas even for quality intent; more steps are safer than a
-    # likely OOM at a larger canvas.
-    large = mode in {"balanced", "quality"} and tier in {"mid", "high"}
-    width, height = (864, 480) if large else (640, 352)
-    if orientation == "portrait":
-        width, height = height, width
-    return {"width": width, "height": height}
+    if mode == "fast":
+        if orientation == "landscape":
+            return {"width": 640, "height": 352}
+        if orientation == "portrait":
+            return {"width": 352, "height": 640}
+        return {"width": 512, "height": 512}
+
+    bucket = QUALITY_BUCKETS["quality" if mode == "quality" else "balanced"]
+    return resolution_from_bucket(orientation, bucket, ALIGNMENT)
 
 
 def _mode_settings(mode: str) -> dict[str, Any]:
@@ -247,7 +309,7 @@ def _estimate_seconds(
         "quality": (480, 900),
     }
     lower, upper = base_ranges[mode]
-    tier_factor = {"low": 1.0, "mid": 0.78, "high": 0.62, "blocked": 1.5}[tier]
+    tier_factor = {"very-low": 1.40, "low": 1.0, "mid": 0.78, "high": 0.62, "blocked": 1.5}[tier]
     pixel_factor = (resolution["width"] * resolution["height"]) / BASE_PIXELS
     frame_factor = max(0.25, frames / BASE_FRAMES)
     ram_factor = 1.15 if ram_gb and ram_gb < 32 else 1.0
@@ -301,11 +363,15 @@ def _make_decision(mode: str, report: dict[str, Any], aspect: str, resolution: s
     if resolution:
         width, height = parse_resolution(resolution)
         selected_resolution = {"width": width, "height": height}
-        if tier == "low" and width * height > BASE_PIXELS:
+        if tier in {"very-low", "low"} and width * height > BASE_PIXELS:
             warnings.append("当前显存档位对显式高分辨率存在 OOM 或长时间 CPU 卸载风险。")
     settings = _mode_settings(mode)
     if tier == "blocked":
-        warnings.append("显存低于约 8 GB，不能把本地 H3 W4A8 路线视为已验证。")
+        warnings.append("显存低于约 6 GB，当前本地 H3 路线没有足够证据支持。")
+    if tier == "very-low":
+        warnings.append("6 GB 显存属于社区实跑支持的实验档，不是 H3 Lite 已验证档；默认从 608x352、4 步开始，并预留较长时间。")
+        if mode != "fast":
+            warnings.append("6 GB 实验档不自动提高分辨率；先完成 fast 基线，再逐项增加画布或步数。")
     if tier == "low" and mode == "quality":
         warnings.append("8 GB VRAM 下质量模式保留 640x352，以优先保证成功率；需要更大画布时应先确认时间和 OOM 风险。")
         warnings.append("当前质量模式仍使用 W4A8/4B 低显存模型，不等同于原生高精度 H3。")
@@ -321,6 +387,21 @@ def _make_decision(mode: str, report: dict[str, Any], aspect: str, resolution: s
     }, warnings
 
 
+def _resolve_megapixel_override(
+    *,
+    aspect: str,
+    megapixels: float | None,
+    resolution: str | None,
+) -> str | None:
+    """Convert an explicit MP bucket into a concrete aligned resolution."""
+    if resolution or megapixels is None:
+        return resolution
+    if megapixels <= 0:
+        raise ValueError("megapixels must be positive")
+    selected = resolution_from_bucket(aspect, megapixels, ALIGNMENT)
+    return f"{selected['width']}x{selected['height']}"
+
+
 def build_plan(
     report: dict[str, Any],
     *,
@@ -330,6 +411,7 @@ def build_plan(
     video_seconds: float = 5.0,
     fps: float = 24.0,
     resolution: str | None = None,
+    megapixels: float | None = None,
     paths: dict[str, str] | None = None,
     timing_file: str | Path | None = None,
 ) -> dict[str, Any]:
@@ -339,6 +421,8 @@ def build_plan(
         raise ValueError("mode must be auto, fast, balanced, or quality")
     if video_seconds <= 0 or fps <= 0:
         raise ValueError("video_seconds and fps must be positive")
+    had_explicit_resolution = resolution is not None
+    resolution = _resolve_megapixel_override(aspect=aspect, megapixels=megapixels, resolution=resolution)
 
     tier = hardware_tier(report)
     ram_gb = _as_float(report.get("system_memory", {}).get("total_gb"))
@@ -410,6 +494,7 @@ def build_plan(
             "mode": requested_mode,
             "target_minutes": target_minutes,
             "aspect": _orientation(aspect),
+            "megapixels": megapixels,
             "video_seconds": video_seconds,
             "fps": fps,
             "frames": frames,
@@ -424,7 +509,8 @@ def build_plan(
         "decision": {
             **decision,
             "budget_fit": budget_fit,
-            "explicit_resolution": resolution is not None,
+            "explicit_resolution": had_explicit_resolution,
+            "explicit_megapixels": megapixels is not None,
             "confirmation_required": False,
         },
         "estimate": {
@@ -473,6 +559,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--target-minutes", type=float, help="maximum wall-clock budget for one generation")
     parser.add_argument("--aspect", default="landscape", help="landscape/portrait/square or 16:9/9:16/1:1")
     parser.add_argument("--resolution", help="explicit WIDTHxHEIGHT override; model alignment rounds down to 32")
+    parser.add_argument("--megapixels", type=float, help="ComfyUI ResolutionSelector-style canvas target, e.g. 0.4 for 16:9 864x480")
     parser.add_argument("--video-seconds", type=float, default=5.0, help="requested clip duration")
     parser.add_argument("--fps", type=float, default=24.0, help="output video FPS")
     parser.add_argument("--no-model-scan", action="store_true")
@@ -524,6 +611,7 @@ def main() -> int:
             video_seconds=args.video_seconds,
             fps=args.fps,
             resolution=args.resolution,
+            megapixels=args.megapixels,
             paths=paths,
             timing_file=timing_file,
         )

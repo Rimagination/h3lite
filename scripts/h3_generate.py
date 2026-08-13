@@ -23,6 +23,65 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from h3_plan import parse_resolution
+from h3_paths import normalize_windows_path
+
+
+COMPONENT_SETS = {
+    "validated-low-vram-a": {
+        "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors",
+        "clip_name": "qwen3vl_4b_int4_convrot.safetensors",
+        "lora_name": "minimax_h3_fl2v_lightx2v_turbo_4step_v0.1_comfy_resized_avg_rank_21_bf16.safetensors",
+    },
+    "portable-16gb-b": {
+        "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed.safetensors",
+        "clip_name": "qwen3vl_4b_fp8_scaled.safetensors",
+        "lora_name": "minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors",
+    },
+}
+
+
+def resolve_model_overrides(workflow: dict[str, Any], comfyui: Path | None) -> dict[str, str]:
+    """Switch only to a complete registered component set.
+
+    Independent filename matching can silently combine an incompatible W4A8
+    checkpoint, encoder, and Turbo LoRA. Keep those three roles atomic.
+    """
+    if comfyui is None or not comfyui.exists():
+        return {}
+    roots = [root for root in (comfyui / "models", comfyui / "custom_nodes") if root.exists()]
+    candidates = [path for root in roots for path in root.rglob("*.safetensors")]
+    available = {path.name for path in candidates}
+    fields: dict[str, tuple[dict[str, Any], str]] = {}
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        for field in ("unet_name", "clip_name", "lora_name"):
+            if isinstance(node["inputs"].get(field), str):
+                fields[field] = (node, str(node["inputs"][field]))
+    if not fields:
+        return {}
+    if all(configured in available for _, configured in fields.values()):
+        return {}
+
+    matches = [
+        (set_name, component_set)
+        for set_name, component_set in COMPONENT_SETS.items()
+        if all(component_set.get(field) in available for field in fields)
+    ]
+    if len(matches) != 1:
+        missing = [configured for _, configured in fields.values() if configured not in available]
+        detail = "no complete registered component set is installed" if not matches else "multiple registered component sets match"
+        raise RuntimeError(f"missing configured model files: {', '.join(missing)}; {detail}; choose a component set explicitly")
+
+    set_name, selected = matches[0]
+    overrides: dict[str, str] = {}
+    for field, (node, configured) in fields.items():
+        replacement = selected[field]
+        if configured != replacement:
+            node["inputs"][field] = replacement
+            overrides[f"{field}:{configured}"] = replacement
+    overrides["component_set"] = set_name
+    return overrides
 
 
 def json_request(base_url: str, path: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: float = 30.0) -> Any:
@@ -63,6 +122,7 @@ def default_workflow_path(template: str) -> Path:
     skill_root = Path(__file__).resolve().parents[1]
     templates = {
         "h3_w4a8_t2v": skill_root / "assets" / "h3_w4a8_t2v_api.json",
+        "h3_w4a8_t2v_compat": skill_root / "assets" / "h3_w4a8_t2v_compat_api.json",
     }
     try:
         path = templates[template]
@@ -139,6 +199,18 @@ def config_fingerprint(workflow: dict[str, Any], prompt: str) -> str:
 def effective_workflow_settings(workflow: dict[str, Any]) -> dict[str, Any]:
     """Extract the settings that matter for later media verification."""
     settings: dict[str, Any] = {}
+    cache_ids = {
+        str(node_id)
+        for node_id, node in workflow.items()
+        if isinstance(node, dict) and "blockcache" in str(node.get("class_type", "")).lower()
+    }
+    settings["block_cache"] = any(
+        isinstance(node, dict)
+        and isinstance(node.get("inputs"), dict)
+        and any(isinstance(value, list) and value and str(value[0]) in cache_ids for value in node["inputs"].values())
+        for node_id, node in workflow.items()
+        if str(node_id) not in cache_ids
+    )
     for node in workflow.values():
         if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
             continue
@@ -154,6 +226,14 @@ def effective_workflow_settings(workflow: dict[str, Any]) -> dict[str, Any]:
             settings["fps"] = inputs["fps"]
         elif class_type == "RandomNoise" and "noise_seed" in inputs:
             settings["seed"] = inputs["noise_seed"]
+        elif class_type == "LoraLoaderModelOnly":
+            if "lora_name" in inputs:
+                settings["lora_name"] = inputs["lora_name"]
+            if "strength_model" in inputs:
+                settings["lora_strength"] = inputs["strength_model"]
+        elif class_type == "MiniMaxH3SigmaShift":
+            settings["shift_video"] = inputs.get("shift_video")
+            settings["shift_audio"] = inputs.get("shift_audio")
     if settings.get("length") is not None and settings.get("fps"):
         settings["expected_duration_seconds"] = round(float(settings["length"]) / float(settings["fps"]), 4)
     return settings
@@ -222,7 +302,7 @@ def acquire_submission_claim(run_root: Path | None, fingerprint: str) -> Path | 
                 return acquire_submission_claim(run_root, fingerprint)
             except OSError:
                 pass
-        raise RuntimeError("another process is preparing the same H3 configuration; wait for it or pass --allow-duplicate") from exc
+        raise RuntimeError("submission claim already exists for this H3 configuration") from exc
     return claim
 
 
@@ -245,6 +325,7 @@ def create_run_manifest(
     args: argparse.Namespace,
     audio_policy: str,
     fingerprint: str,
+    model_overrides: dict[str, str] | None = None,
 ) -> tuple[Path | None, dict[str, Any]]:
     if run_root is None:
         return None, {}
@@ -278,6 +359,7 @@ def create_run_manifest(
         "output_dir": str(Path(args.output_dir).expanduser().resolve()) if args.output_dir else None,
         "effective_settings": effective_workflow_settings(workflow),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
+        "model_overrides": model_overrides or {},
     }
     record["run_dir"] = str(run_dir)
     record["manifest_path"] = str(manifest_path)
@@ -372,6 +454,16 @@ def apply_overrides(workflow: dict[str, Any], args: argparse.Namespace) -> None:
             inputs["steps"] = args.steps
         if args.fps is not None and class_type == "CreateVideo" and "fps" in inputs:
             inputs["fps"] = args.fps
+        if class_type == "LoraLoaderModelOnly":
+            if args.lora_name is not None and "lora_name" in inputs:
+                inputs["lora_name"] = args.lora_name
+            if args.lora_strength is not None and "strength_model" in inputs:
+                inputs["strength_model"] = args.lora_strength
+        if class_type == "MiniMaxH3SigmaShift":
+            if args.shift_video is not None and "shift_video" in inputs:
+                inputs["shift_video"] = args.shift_video
+            if args.shift_audio is not None and "shift_audio" in inputs:
+                inputs["shift_audio"] = args.shift_audio
         if args.filename_prefix and class_type == "SaveVideo" and "filename_prefix" in inputs:
             inputs["filename_prefix"] = args.filename_prefix
 
@@ -441,7 +533,7 @@ def choose_prompt_target(workflow: dict[str, Any], node_id: str | None, field: s
 def read_prompt(args: argparse.Namespace) -> str:
     if args.prompt_file:
         try:
-            return Path(args.prompt_file).expanduser().read_text(encoding="utf-8")
+            return normalize_windows_path(args.prompt_file).read_text(encoding="utf-8")
         except OSError as exc:
             raise RuntimeError(f"Cannot read prompt file {args.prompt_file}: {exc}") from exc
     if args.prompt_text is not None:
@@ -662,13 +754,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
     parser.add_argument("--workflow", help="ComfyUI API-format workflow JSON")
-    parser.add_argument("--workflow-template", default="h3_w4a8_t2v", choices=["h3_w4a8_t2v"], help="bundled workflow used when --workflow is omitted")
+    parser.add_argument("--workflow-template", default="h3_w4a8_t2v", choices=["h3_w4a8_t2v", "h3_w4a8_t2v_compat"], help="bundled workflow used when --workflow is omitted")
     prompt_group = parser.add_mutually_exclusive_group(required=True)
     prompt_group.add_argument("--prompt-file", help="UTF-8 text file containing the H3 prompt")
     prompt_group.add_argument("--prompt-text", help="prompt text supplied directly on the command line")
     parser.add_argument("--prompt-node", help="node id whose prompt input should be replaced")
     parser.add_argument("--prompt-field", help="input field on the prompt node, such as prompt or text")
     parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
+    parser.add_argument("--comfyui", help="ComfyUI root used by --resolve-models")
     parser.add_argument("--filename-prefix", help="override SaveVideo filename_prefix")
     parser.add_argument("--profile", choices=["fast", "balanced", "quality"], default="fast", help="generation intent; fast is the validated default")
     parser.add_argument("--seed", type=int, help="override RandomNoise noise_seed")
@@ -678,6 +771,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--length", type=int, help="override H3 frame count")
     parser.add_argument("--steps", type=int, help="override BasicScheduler steps")
     parser.add_argument("--fps", type=float, help="override CreateVideo fps")
+    parser.add_argument("--lora-name", help="experimental LoRA filename override; default template remains unchanged")
+    parser.add_argument("--lora-strength", type=float, help="experimental model-only LoRA strength override")
+    parser.add_argument("--shift-video", type=float, help="experimental MiniMax H3 video shift override")
+    parser.add_argument("--shift-audio", type=float, help="experimental MiniMax H3 audio shift override")
     parser.add_argument("--disable-block-cache", action="store_true", help="bypass optional H3 block-cache acceleration")
     parser.add_argument("--audio-policy", choices=["auto", "require", "allow", "disable"], default="auto", help="auto keeps native audio unless complete silence is explicit")
     parser.add_argument("--run-root", help="directory for prompt/workflow/config manifests; defaults beside ComfyUI output")
@@ -686,6 +783,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--poll-interval", type=float, default=2.0, help="history polling interval in seconds")
     parser.add_argument("--dry-run", action="store_true", help="print the mutated workflow without submitting it")
     parser.add_argument("--queue-only", action="store_true", help="submit and return prompt_id immediately without waiting")
+    parser.add_argument("--watch", action="store_true", help="submit, then monitor and verify in this same command")
+    parser.add_argument("--resolve-models", action="store_true", help="resolve missing template filenames from unique local role matches")
+    parser.add_argument("--watch-interval", type=float, default=20.0, help="seconds between --watch polls")
+    parser.add_argument("--watch-timeout", type=float, default=3600.0, help="maximum seconds for --watch")
+    parser.add_argument("--dynamic-check", dest="dynamic_check", action="store_true", default=True)
+    parser.add_argument("--skip-dynamic-check", dest="dynamic_check", action="store_false")
     parser.add_argument("--json", action="store_true", help="print a machine-readable result")
     return parser.parse_args()
 
@@ -701,8 +804,9 @@ def main() -> int:
     manifest_path: Path | None = None
     claim_path: Path | None = None
     try:
-        workflow_path = Path(args.workflow).expanduser().resolve() if args.workflow else default_workflow_path(args.workflow_template)
+        workflow_path = normalize_windows_path(args.workflow).resolve() if args.workflow else default_workflow_path(args.workflow_template)
         workflow = load_workflow(workflow_path)
+        model_overrides = resolve_model_overrides(workflow, normalize_windows_path(args.comfyui).resolve() if args.comfyui else None) if args.resolve_models else {}
         apply_profile(workflow, args.profile)
         if args.resolution:
             width, height = parse_resolution(args.resolution)
@@ -730,11 +834,10 @@ def main() -> int:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return 0
 
-        output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
-        run_root = Path(args.run_root).expanduser().resolve() if args.run_root else default_run_root(output_dir)
+        output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else None
+        run_root = normalize_windows_path(args.run_root).resolve() if args.run_root else default_run_root(output_dir)
         fingerprint = config_fingerprint(workflow, prompt)
         if not args.allow_duplicate:
-            claim_path = acquire_submission_claim(run_root, fingerprint)
             existing = active_manifest(run_root, fingerprint)
             if existing:
                 result = {
@@ -751,6 +854,26 @@ def main() -> int:
                 else:
                     print(f"Existing active prompt {existing.get('prompt_id')}; duplicate submission skipped")
                 return 0
+            try:
+                claim_path = acquire_submission_claim(run_root, fingerprint)
+            except RuntimeError as exc:
+                existing = active_manifest(run_root, fingerprint)
+                if existing:
+                    result = {
+                        "ok": True,
+                        "queued": False,
+                        "deduplicated": True,
+                        "prompt_id": existing.get("prompt_id"),
+                        "run_manifest": existing.get("manifest_path"),
+                        "config_fingerprint": fingerprint,
+                        "message": "matching task is already queued or running",
+                    }
+                    if args.json:
+                        print(json.dumps(result, ensure_ascii=False, indent=2))
+                    else:
+                        print(f"Matching task already exists: prompt_id={existing.get('prompt_id')}")
+                    return 0
+                raise RuntimeError("another submission is preparing this configuration; no prompt_id is available yet") from exc
 
         manifest_path, _ = create_run_manifest(
             run_root,
@@ -761,6 +884,7 @@ def main() -> int:
             args=args,
             audio_policy=resolved_audio_policy,
             fingerprint=fingerprint,
+            model_overrides=model_overrides,
         )
         client_id = str(uuid.uuid4())
         try:
@@ -799,6 +923,60 @@ def main() -> int:
             else:
                 print(f"Queued prompt {prompt_id}")
             return 0
+        if args.watch:
+            from h3_status import compact_result, status_once
+
+            status_args = argparse.Namespace(
+                prompt_id=prompt_id,
+                base_url=args.base_url,
+                output_dir=str(output_dir) if output_dir else None,
+                run_manifest=str(manifest_path) if manifest_path else None,
+                run_root=str(run_root) if run_root else None,
+                expected_duration=None,
+                expected_frames=None,
+                expected_fps=None,
+                require_audio=resolved_audio_policy == "require",
+                dynamic_check=args.dynamic_check,
+                compact=True,
+                verbose=False,
+                watch=False,
+                watch_interval=args.watch_interval,
+                watch_timeout=args.watch_timeout,
+                json=True,
+            )
+            watch_started = time.monotonic()
+            status_result: dict[str, Any] = {"ok": False, "complete": False, "state": "queued", "prompt_id": prompt_id}
+            while time.monotonic() - watch_started < max(1.0, args.watch_timeout):
+                status_result = status_once(status_args)
+                if status_result.get("complete"):
+                    break
+                time.sleep(max(1.0, args.watch_interval))
+            if not status_result.get("complete"):
+                status_result = {
+                    "ok": False,
+                    "complete": True,
+                    "prompt_id": prompt_id,
+                    "state": "watch_timeout",
+                    "error": f"watch exceeded {args.watch_timeout:.0f} seconds",
+                }
+            result = {
+                "ok": bool(status_result.get("ok")),
+                "prompt_id": prompt_id,
+                "client_id": client_id,
+                "target": target,
+                "audio_policy": resolved_audio_policy,
+                "config_fingerprint": fingerprint,
+                "run_manifest": str(manifest_path) if manifest_path else None,
+                "watch": True,
+                "status": compact_result(status_result),
+            }
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"{result['status'].get('state', 'unknown')}: {prompt_id}")
+                for item in result["status"].get("outputs", []):
+                    print(f"Output: {item.get('path')} | verified={item.get('verified', 'unknown')}")
+            return 0 if result["ok"] else 2
         record = wait_for_completion(args.base_url, prompt_id, args.timeout, args.poll_interval)
         output_paths = resolve_output_paths(record, output_dir)
         settings = effective_workflow_settings(workflow)
