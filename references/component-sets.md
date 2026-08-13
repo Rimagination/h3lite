@@ -36,7 +36,7 @@ for Set A.
 | Role | File | Source / expected bytes |
 | --- | --- | --- |
 | W4A8 diffusion | `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors` | `Kijai/MiniMax-H3-experimental`; 12,540,858,008 |
-| Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` | `Comfy-Org/Krea-2`; 5,242,467,968 |
+| Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` | `Comfy-Org/Krea-2`; 5,242,467,968; SHA-256 `54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094` |
 | ClipProj | `mmh3-4b-ClipProj-celeb-mlp.safetensors` | `NicoLab28/ClipProj-MiniMax-H3`; 304,213,176; SHA-256 `275b389991276532d969dbb32f91ce67e170549873e61819cfec52a770660699` |
 | Turbo LoRA | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors` | `drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`; 298,177,224; SHA-256 `1b85da614014024a0c9507f12558917dcc69b6adb564e716324594f401723115` |
 | Video VAE | `minimax_h3_video_vae_fp16.safetensors` | `Comfy-Org/MiniMax-H3`; 5,207,808,496 |
@@ -56,6 +56,9 @@ The Set B diffusion checkpoint must be exactly 12,540,858,008 bytes with
 SHA-256 `01aa7b92c007c599890461c325f9b7e3c96fb06c36f242f95b62f7f20e538dec`.
 A historical same-size local copy was corrupted by two downloaders writing the
 same destination and produced colored mosaic output. Never accept size alone.
+`h3_generate.py` verifies registered Set B components on first use and stores a
+path/size/mtime-bound cache under `user/h3lite_runs/_environment/`. Rehash only
+when the file changes, the cache is absent, or failure recovery invalidates it.
 
 ## Experimental quality route
 
