@@ -114,9 +114,23 @@ https://github.com/Rimagination/h3lite
 
 以上素材来自 MiniMax H3 官方可复现案例的输入文件；来源 URL 和校验值记录在 [`assets/examples/sources.json`](assets/examples/sources.json)。I2VA 和 Ref2VA 需要相应的图片、视频或音频工作流；如果当前安装只有默认文本生成路线，H3 Lite 会先说明并引导配置缺少的模式。
 
-### 默认路线和电脑要求
+### 已验证电脑配置要求
 
 默认使用已经验证过的低显存 W4A8/4B fast 路线，优先保证笔记本上的成功率和速度。
+
+本仓库中的红球、金毛幼犬和星舰视频已在下面这台电脑上实际生成：
+
+| 部件 | 已验证配置 |
+|---|---|
+| 电脑 | 机械革命翼龙 15 Pro（MECHREVO Yilong15Pro）笔记本 |
+| GPU | NVIDIA GeForce RTX 4070 Laptop GPU，8 GB 显存 |
+| CPU | AMD Ryzen 7 8845H，8 核 16 线程 |
+| 内存 | 32 GB |
+| 系统 | Windows 11 专业版 64 位 |
+| 已验证路线 | W4A8/4B fast，4 步，ComfyUI，本地原生视频与声音生成 |
+| 已验证输出 | 640×352 的 5 秒视频；1280×704 的 8 秒星舰视频 |
+
+这是目前有成片证据的基准配置，不代表最低要求。其他电脑档位仍按下面的保守建议选择：
 
 | 电脑情况 | 默认建议 |
 |---|---|
@@ -239,9 +253,23 @@ Use H3 Lite to generate a 5-second video from the reference video and male voice
 
 These files are the inputs referenced by MiniMax H3's official reproducible cases; their source URLs and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json). I2VA and Ref2VA require the corresponding image, video, or audio workflow. If the installation only has the default text-to-video route, H3 Lite explains what is missing and guides the user through configuring that mode.
 
-### Default route and hardware
+### Validated hardware configuration
 
 The default is the validated low-VRAM W4A8/4B fast route, prioritizing a reliable and reasonably fast result on laptops.
+
+The red-ball, golden-retriever, and starship videos in this repository were generated locally on the following machine:
+
+| Component | Validated configuration |
+|---|---|
+| Computer | MECHREVO Yilong15Pro laptop |
+| GPU | NVIDIA GeForce RTX 4070 Laptop GPU with 8 GB VRAM |
+| CPU | AMD Ryzen 7 8845H, 8 cores / 16 threads |
+| Memory | 32 GB |
+| System | Windows 11 Pro, 64-bit |
+| Validated route | W4A8/4B fast, 4 steps, ComfyUI, local native video and audio generation |
+| Validated outputs | 640×352 five-second clips; 1280×704 eight-second starship clip |
+
+This is the current evidence-backed reference configuration, not a claimed minimum. Use the following conservative guidance for other machines:
 
 | Machine | Default recommendation |
 |---|---|
