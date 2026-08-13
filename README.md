@@ -116,19 +116,16 @@ https://github.com/Rimagination/h3lite
 
 默认使用已经验证过的低显存 W4A8/4B fast 路线，优先保证笔记本上的成功率和速度。
 
-本仓库中的红球、金毛幼犬和星舰视频已在下面这台电脑上实际生成：
+本仓库中的红球、金毛幼犬和星舰视频已在下面这台 8 GB 笔记本上实际生成；Set B 也已在一台 16 GB 台式机上跑通：
 
-| 部件 | 已验证配置 |
-|---|---|
-| 电脑 | 机械革命翼龙 15 Pro（MECHREVO Yilong15Pro）笔记本 |
-| GPU | NVIDIA GeForce RTX 4070 Laptop GPU，8 GB 显存 |
-| CPU | AMD Ryzen 7 8845H，8 核 16 线程 |
-| 内存 | 32 GB |
-| 系统 | Windows 11 专业版 64 位 |
-| 已验证路线 | W4A8/4B fast，4 步，ComfyUI，T2VA/I2VA，本地原生视频与声音生成 |
-| 已验证输出 | 640×352 的 5 秒 T2VA/I2VA 视频；1280×704 的 8 秒星舰视频 |
+| 电脑 | GPU | CPU / 内存 | 已验证路线 |
+|---|---|---|---|
+| 机械革命翼龙 15 Pro 笔记本 | RTX 4070 Laptop，8 GB | Ryzen 7 8845H / 32 GB | Set A/Set B，`LOW_VRAM`，W4A8/4B，4 步，T2VA/I2VA，原生声音 |
+| Windows 10 台式机 | RTX 4060 Ti，16 GB | i5-13400F / 32 GB | Set B，`NORMAL_VRAM`，W4A8/4B，4 步，T2VA/I2VA，原生声音 |
 
-下面这台电脑提供当前基准结果；其他硬件按显存档位选择路线：
+同一套 Set B 模型、工作流、提示词、seed 和 640×352 / 124 帧 / 4 步参数下，4060 Ti 16 GB 用时 77.08 秒，4070 Laptop 8 GB 用时 591.22 秒。约 7.7 倍差距主要来自 16 GB 能让模型保持 `NORMAL_VRAM`，而 8 GB 需要动态加载和内存卸载；这不是纯 GPU 算力排名，因为两台电脑的桌面/笔记本形态和运行时也不同。
+
+其他硬件按显存档位选择路线：
 
 | 电脑情况 | 默认建议 |
 |---|---|
@@ -141,7 +138,9 @@ https://github.com/Rimagination/h3lite
 #### 组件集
 
 H3 Lite 提供两套完整组件集：运行时通过 `--component-set A`
-或 `--component-set B` 选择一套完整组合。Set B 的自动路线使用兼容工作流；Set A 在加速节点齐全时使用 fast 工作流。
+或 `--component-set B` 选择一套完整组合。Set B 的兼容工作流已经实测验证，自动路线会使用它；尚未升为默认的只是 Set B 的可选 Sage/Sol/Chunk/T8 加速图。Set A 在加速节点齐全时使用 fast 工作流。
+
+Set B 曾出现“文件大小正确但内容损坏”的 W4A8 主模型，结果是彩色马赛克。H3 Lite 会在首次使用或文件变化后校验已登记的 SHA-256，并缓存结果；正常复跑不会重复计算大文件哈希。
 
 <a id="english"></a>
 ## English
@@ -237,19 +236,16 @@ The ideas and Ref2VA assets come from MiniMax H3's official reproducible cases; 
 
 The default is the validated low-VRAM W4A8/4B fast route, prioritizing a reliable and reasonably fast result on laptops.
 
-The red-ball, golden-retriever, and starship videos in this repository were generated locally on the following machine:
+The red-ball, golden-retriever, and starship videos were generated on the validated 8 GB laptop below. Set B was also validated on a 16 GB desktop:
 
-| Component | Validated configuration |
-|---|---|
-| Computer | MECHREVO Yilong15Pro laptop |
-| GPU | NVIDIA GeForce RTX 4070 Laptop GPU with 8 GB VRAM |
-| CPU | AMD Ryzen 7 8845H, 8 cores / 16 threads |
-| Memory | 32 GB |
-| System | Windows 11 Pro, 64-bit |
-| Validated route | W4A8/4B fast, 4 steps, ComfyUI, T2VA/I2VA, local native video and audio generation |
-| Validated outputs | 640×352 five-second T2VA/I2VA clips; 1280×704 eight-second starship clip |
+| Machine | GPU | CPU / RAM | Validated route |
+|---|---|---|---|
+| MECHREVO Yilong15Pro laptop | RTX 4070 Laptop, 8 GB | Ryzen 7 8845H / 32 GB | Set A/Set B, `LOW_VRAM`, W4A8/4B, 4 steps, T2VA/I2VA, native audio |
+| Windows 10 desktop | RTX 4060 Ti, 16 GB | i5-13400F / 32 GB | Set B, `NORMAL_VRAM`, W4A8/4B, 4 steps, T2VA/I2VA, native audio |
 
-Use this as the reference profile and select the route by VRAM:
+With the same Set B models, workflow, prompt, seed, and 640×352 / 124-frame / 4-step settings, the RTX 4060 Ti 16 GB run took 77.08 seconds and the RTX 4070 Laptop 8 GB run took 591.22 seconds. The observed 7.7× gap is mainly explained by `NORMAL_VRAM` versus dynamic loading and offload under `LOW_VRAM`; it is not a pure GPU benchmark because the machines and runtimes also differ.
+
+Select the route by VRAM:
 
 | Machine | Default recommendation |
 |---|---|
@@ -261,7 +257,9 @@ Model weights, ComfyUI, and third-party custom nodes come from their respective 
 
 #### Component sets
 
-H3 Lite provides two complete component sets. Select one with `--component-set A` or `--component-set B`; Set B uses the compatibility workflow by default, while Set A uses the fast workflow when its acceleration nodes are loaded.
+H3 Lite provides two complete component sets. Select one with `--component-set A` or `--component-set B`. Set B's compatibility workflow is validated and selected automatically; only its optional Sage/Sol/Chunk/T8 acceleration graph is not yet the default. Set A uses the fast workflow when its acceleration nodes are loaded.
+
+A Set B W4A8 checkpoint once had the correct byte size but corrupted contents and produced colored mosaic frames. H3 Lite verifies registered SHA-256 values on first use or after a file changes, then caches the result so normal reruns do not rehash large files.
 
 <a id="references--参考资料"></a>
 ## References / 参考资料

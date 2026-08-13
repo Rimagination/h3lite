@@ -27,16 +27,17 @@ not require a separate model download.
 
 The command-line ID is `validated-low-vram-a` (short alias `A`).
 
-## Set B — portable 16 GB candidate
+## Set B — validated portable W4A8 route
 
-This combination completed a real RTX 4060 Ti 16 GB installation and video
-generation, but it is a separate route rather than an automatic replacement
-for Set A.
+This combination produced coherent video with native audio on both an RTX
+4060 Ti 16 GB desktop in `NORMAL_VRAM` mode and an RTX 4070 Laptop 8 GB system
+in `LOW_VRAM` mode. The compatibility workflow is validated; this remains a
+separate route rather than an automatic replacement for Set A.
 
 | Role | File | Source / expected bytes |
 | --- | --- | --- |
 | W4A8 diffusion | `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors` | `Kijai/MiniMax-H3-experimental`; 12,540,858,008 |
-| Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` | `Comfy-Org/Krea-2`; 5,242,467,968 |
+| Text encoder | `qwen3vl_4b_fp8_scaled.safetensors` | `Comfy-Org/Krea-2`; 5,242,467,968; SHA-256 `54bd5144df0bbc25dd6ccadfcb826b521445a1b06ae5a42570bdd2974ca87094` |
 | ClipProj | `mmh3-4b-ClipProj-celeb-mlp.safetensors` | `NicoLab28/ClipProj-MiniMax-H3`; 304,213,176; SHA-256 `275b389991276532d969dbb32f91ce67e170549873e61819cfec52a770660699` |
 | Turbo LoRA | `minimax_h3_fl2v_turbo_4step_v1.0_768p_comfyui_resized_avg_rank_21_bf16.safetensors` | `drbaph/MiniMax-H3-Turbo-Lora-ComfyUI`; 298,177,224; SHA-256 `1b85da614014024a0c9507f12558917dcc69b6adb564e716324594f401723115` |
 | Video VAE | `minimax_h3_video_vae_fp16.safetensors` | `Comfy-Org/MiniMax-H3`; 5,207,808,496 |
@@ -45,9 +46,10 @@ for Set A.
 Pin the exact workflow and node revisions used by this set in its environment
 manifest. Do not silently select it through a loose filename match.
 
-The command-line ID is `portable-16gb-b` (short alias `B`). In `auto` mode,
-H3 Lite currently keeps this set on the compatibility workflow until a pinned
-accelerated run records the full Sage/Sol/Chunk/T8 chain. Use
+The command-line ID remains `portable-16gb-b` (short alias `B`) for backward
+compatibility; the word `portable` does not mean unvalidated. In `auto` mode,
+H3 Lite keeps this validated set on its validated compatibility workflow until
+a pinned accelerated run records the full Sage/Sol/Chunk/T8 chain. Use
 `--acceleration fast` only for an intentional comparison. If both Set A and
 Set B are installed, pass `--component-set A` or `--component-set B`; do not
 let a filename heuristic choose between them.
@@ -56,6 +58,9 @@ The Set B diffusion checkpoint must be exactly 12,540,858,008 bytes with
 SHA-256 `01aa7b92c007c599890461c325f9b7e3c96fb06c36f242f95b62f7f20e538dec`.
 A historical same-size local copy was corrupted by two downloaders writing the
 same destination and produced colored mosaic output. Never accept size alone.
+`h3_generate.py` verifies registered Set B components on first use and stores a
+path/size/mtime-bound cache under `user/h3lite_runs/_environment/`. Rehash only
+when the file changes, the cache is absent, or failure recovery invalidates it.
 
 ## Experimental quality route
 

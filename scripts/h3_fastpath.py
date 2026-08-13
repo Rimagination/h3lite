@@ -30,9 +30,9 @@ ACCELERATION_CLASS_REQUIREMENTS = {
     "block_cache": ("MiniMaxH3BlockCacheT8",),
 }
 
-# Set B has a real generation record but no pinned local evidence for the full
-# Sol/Sage/Chunk/T8 chain. Keep it on the compatibility graph in auto mode
-# until a matching accelerated run is recorded.
+# Set B is validated with the compatibility graph, but the full
+# Sol/Sage/Chunk/T8 chain has no matching pinned validation record. Keep auto
+# mode on the validated compatibility graph until that accelerated run exists.
 COMPONENT_SET_ACCELERATION_POLICY = {
     "portable-16gb-b": "compat",
 }
@@ -641,7 +641,7 @@ def parse_args() -> argparse.Namespace:
         "--acceleration",
         choices=["auto", "fast", "compat"],
         default="auto",
-        help="optional acceleration policy; auto is conservative for unvalidated component sets",
+        help="optional acceleration policy; auto uses each component set's validated graph",
     )
     parser.add_argument("--mode", choices=["auto", "t2v", "i2va", "fl2va", "l2va"], default="auto", help="reference route; inferred from frame arguments when omitted")
     parser.add_argument("--first-frame", help="local first-frame image for I2VA/FL2VA")

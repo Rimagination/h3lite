@@ -29,10 +29,12 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Run the read-only preflight after the doctor and planner. Treat low available RAM/VRAM as a caution, but stop when the pagefile is critically low, required assets are missing, or the doctor recommends an alternative backend.
 - Do not perform a full recursive doctor scan for every prompt. Cache the environment report under `<ComfyUI>/user/h3lite_runs/_environment/`; reuse it for a normal session (normally no older than 30 minutes), invalidate it after ComfyUI/model/node/driver changes or a failed run, and use `h3_preflight.py --refresh-runtime` for volatile resource fields.
 - Do not revalidate large model files before every prompt. Trust the cached download/component manifest unless the file is missing, has a different size/mtime than recorded, the user changed components, or the previous run failed with a model/node/loader error.
+- For registered Set B files, require the recorded SHA-256 on first use or after a size/mtime change. A same-size corrupted W4A8 checkpoint produced colored mosaic frames, so byte count alone is not proof of integrity; reuse the cached integrity result on unchanged files.
 - Treat every submission as an auditable run: save the effective prompt, mutated API workflow, configuration fingerprint, queue ID, actual execution time, and verified output in the run manifest.
 - Keep agent-facing status compact: omit ComfyUI's full history graph by default; use verbose history only when diagnosing a failure.
 - Never submit an identical configuration while its manifest is `submitting`, `queued`, or `running`. Return the existing prompt ID instead; use `--allow-duplicate` only when the user explicitly asks for a second identical run.
 - Treat low-VRAM timing as an empirical estimate. The first run can be much slower because kernels compile and weights move between system RAM and VRAM.
+- Prefer `NORMAL_VRAM` when a validated 16 GB system can keep Set B resident. In a same-model/workflow/prompt/seed 640x352 comparison, an RTX 4060 Ti 16 GB run took 77.08 seconds versus 591.22 seconds on an RTX 4070 Laptop 8 GB using `LOW_VRAM`; treat dynamic loading/offload as the main operational explanation, not as a pure GPU benchmark or a promise.
 - When launching ComfyUI as a background process, redirect stdout and stderr to persistent files. A detached pipe can become invalid after the launching session is cleaned up, leaving ComfyUI alive but causing tqdm/logger writes to fail with `OSError: [Errno 22] Invalid argument`. On that signature, restart ComfyUI with persistent logs; do not redownload models or rerun a full doctor unless the restart exposes another error.
 - Treat run-history cleanup as explicit maintenance, never hot-path work. Use `scripts/h3_cleanup.py` in dry-run mode first and require `--apply` before deleting eligible run snapshots. Preserve `_environment`, `_hotpath`, `_workflows`, `_experiments`, prompt folders, timing data, and generated output files.
 
@@ -250,9 +252,11 @@ Cache are optional unless the selected accelerated graph explicitly uses them.
 `/object_info` when available and uses the accelerated T2V or I2V graph only
 when the Sage, Sol, Chunk Feed Forward, and T8 classes are actually loaded.
 Pass `--component-set A` or `--component-set B` when both complete sets are
-installed. Set B currently defaults to the compatibility graph in `auto` mode
-until a pinned accelerated run is recorded; use `--acceleration fast` only for
-an intentional trial. Use `--acceleration compat` to force the fallback graph.
+installed. Set B is validated with the compatibility graph on RTX 4060 Ti
+16 GB and RTX 4070 Laptop 8 GB systems, so `auto` selects that graph. Its full
+Sage/Sol/Chunk/T8 acceleration chain is not yet the validated default; use
+`--acceleration fast` only for an intentional trial. Use `--acceleration
+compat` to force the validated compatibility graph.
 Both graphs preserve the H3 sampler, native audio, ClipProj, LoRA, dual VAEs,
 and native first/last-frame inputs without optional patches.
 

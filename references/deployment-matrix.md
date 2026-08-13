@@ -76,6 +76,23 @@ blindly copying an old command.
 
 The thresholds are operational heuristics. VRAM is not the only constraint: system RAM, disk speed, CUDA kernel support, and model offload behavior can dominate the elapsed time.
 
+### Controlled Set B timing evidence
+
+The same Set B models, compatibility workflow, prompt, seed, 640x352 canvas,
+124 frames, and four steps were run on two validated machines:
+
+| Hardware | Memory mode | ComfyUI execution time | Result |
+| --- | --- | ---: | --- |
+| RTX 4060 Ti 16 GB desktop, i5-13400F, 32 GB RAM | `NORMAL_VRAM` | 77.08 s | coherent video and native audio |
+| RTX 4070 Laptop 8 GB, Ryzen 7 8845H, 32 GB RAM | `LOW_VRAM` with dynamic loading/offload | 591.22 s | coherent video and native audio |
+
+The 7.7x observed gap is primarily consistent with model residency versus
+dynamic loading/offload. Do not attribute it to output caching or optional
+acceleration nodes: both runs performed real sampling with the compatibility
+graph. This remains a cross-machine comparison, not a pure GPU-compute
+benchmark, because desktop/laptop power limits and attention runtimes differ.
+Use it to choose the memory profile and estimate time, not to rank GPUs.
+
 ### Community low-VRAM timing evidence
 
 Keep these observations as planning anchors, not guarantees. They came from different posters, model quantizations, workflows, software versions, and thermal/power conditions:
@@ -459,9 +476,11 @@ For a requested action, status verification should use
 video stream, expected duration/frame count/FPS, the requested audio policy,
 and a first/middle/last frame classification of `dynamic`. Pending status is
 `ok:false, complete:false`; only a completed verified media response is
-`ok:true`. The automated check catches black/flat output; inspect suspicious
-block/mosaic frames visually. Use `--verbose` only for failure diagnosis and
-use `--watch` only with a bounded timeout.
+`ok:true`. The automated check catches black/flat output and samples RGB color
+statistics for abrupt saturated block patterns. A `suspected_mosaic` result is
+a failed verification, not a successful render; inspect its sampled frames and
+validate the selected component set before retrying. Use `--verbose` only for
+failure diagnosis and use `--watch` only with a bounded timeout.
 
 ## Triage order
 
