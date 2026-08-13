@@ -44,10 +44,24 @@ https://github.com/Rimagination/h3lite
 
 ### 快速验证
 
-这是我们最早验证成功的快速生成案例。它依次写清了画面风格、球的动作与固定镜头，以及撞击和滚动声。安装完成后，可以直接发送：
+**案例 1 · 红球弹跳**
+
+安装完成后，可以先用这个简单案例快速验证视频与声音生成：
 
 ```text
 请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
+```
+
+**案例 2 · 金毛幼犬醒来（分段提示）**
+
+连续动作按时间分段，通常能让模型更好地遵循动作顺序：
+
+```text
+使用 H3 Lite 生成一个 5 秒横屏视频：
+
+[0s-2s] 一只金毛幼犬蜷缩着睡在洒满阳光的木地板上，晨光透过窗户倾泻而入，尘埃微粒在空气中漂浮。
+
+[2s-5s] 幼犬慢慢醒来，前爪向前伸展，打了个带着细小吱声的哈欠，然后坐起身，用明亮好奇的眼睛环顾四周，尾巴开始摇晃。
 ```
 
 不需要自己填写模型名称、节点名称、采样步数或 ComfyUI 工作流。`H3 Lite` 会根据电脑和要求决定这些细节。
@@ -151,10 +165,24 @@ Put ComfyUI at F:\MiniMax-H3\ComfyUI. Reuse it if it is already healthy.
 
 ### Quick validation
 
-This is the first fast-generation example we successfully validated. After installation, send:
+**Example 1 · Bouncing red ball**
+
+After installation, start with this simple prompt to quickly validate video and audio generation:
 
 ```text
 Use H3 Lite to generate a 5-second landscape video. A small matte red rubber ball bounces twice on grey concrete, then rolls out of frame to the right. Use a locked-off low-angle camera, cold overcast daylight, shallow depth of field, and a 35mm cinematic look. Keep the sounds of the ball striking the ground twice and rolling across the concrete. No music.
+```
+
+**Example 2 · Golden retriever puppy wakes up (timeline prompt)**
+
+For consecutive actions, dividing the prompt by time usually helps the model follow the intended sequence more reliably:
+
+```text
+Use H3 Lite to generate a 5-second landscape video:
+
+[0s-2s] A golden retriever puppy sleeps curled up on a sunlit wooden floor, morning light streaming through a window, dust motes floating in the air.
+
+[2s-5s] The puppy slowly wakes up, stretches its front paws forward, yawns with a tiny squeak, then sits up and looks around with bright curious eyes as its tail starts wagging.
 ```
 
 ### Generate video with structured prompts
