@@ -1,0 +1,33 @@
+# Python and local tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+.env
+
+# Local H3/ComfyUI runtime artifacts
+h3lite_runs/
+ComfyUI/
+output/
+*.mp4
+*.webm
+*.mov
+*.wav
+*.png
+*.jpg
+*.jpeg
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.log
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

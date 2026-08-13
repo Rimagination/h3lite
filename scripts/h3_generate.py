@@ -1,0 +1,870 @@
+#!/usr/bin/env python3
+"""Submit and monitor an API-format workflow through a local ComfyUI server.
+
+The fast path uses the bundled, validated low-VRAM H3 workflow when no workflow
+is supplied. It changes only explicit prompt/settings overrides in memory; it
+never edits the workflow asset on disk.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+import uuid
+from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from h3_plan import parse_resolution
+
+
+def json_request(base_url: str, path: str, method: str = "GET", payload: dict[str, Any] | None = None, timeout: float = 30.0) -> Any:
+    url = base_url.rstrip("/") + path
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    request = Request(url, data=data, method=method, headers={"Content-Type": "application/json"})
+    try:
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+    except HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"ComfyUI HTTP {exc.code} at {path}: {body[:1000]}") from exc
+    except URLError as exc:
+        raise RuntimeError(f"Cannot reach ComfyUI at {base_url}: {exc.reason}") from exc
+    if not raw:
+        return {}
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"ComfyUI returned non-JSON data at {path}: {raw[:300]!r}") from exc
+
+
+def load_workflow(path: Path) -> dict[str, Any]:
+    try:
+        workflow = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        raise RuntimeError(f"Cannot read workflow {path}: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Workflow is not valid JSON: {path}: {exc}") from exc
+    if not isinstance(workflow, dict):
+        raise RuntimeError("API-format workflow must be a JSON object keyed by node id")
+    if "nodes" in workflow and isinstance(workflow["nodes"], list):
+        raise RuntimeError("This helper expects ComfyUI API-format JSON, not a UI workflow with a nodes list")
+    return workflow
+
+
+def default_workflow_path(template: str) -> Path:
+    skill_root = Path(__file__).resolve().parents[1]
+    templates = {
+        "h3_w4a8_t2v": skill_root / "assets" / "h3_w4a8_t2v_api.json",
+    }
+    try:
+        path = templates[template]
+    except KeyError as exc:
+        raise RuntimeError(f"Unknown workflow template: {template}") from exc
+    if not path.exists():
+        raise RuntimeError(f"Bundled workflow template is missing: {path}")
+    return path
+
+
+PROFILE_STEPS = {
+    "fast": 4,
+    "balanced": 6,
+    "quality": 8,
+}
+
+
+COMPLETE_SILENCE_MARKERS = (
+    "完全静音",
+    "无任何声音",
+    "无声音",
+    "no audio",
+    "complete silence",
+    "totally silent",
+)
+
+
+def has_native_audio_path(workflow: dict[str, Any]) -> bool:
+    """Return whether the graph keeps H3's audio VAE connected to CreateVideo."""
+    has_audio_decode = any(
+        isinstance(node, dict) and "vaedecodeaudio" in str(node.get("class_type", "")).lower()
+        for node in workflow.values()
+    )
+    has_audio_mux = any(
+        isinstance(node, dict)
+        and str(node.get("class_type", "")).lower() == "createvideo"
+        and isinstance(node.get("inputs"), dict)
+        and "audio" in node["inputs"]
+        for node in workflow.values()
+    )
+    return has_audio_decode and has_audio_mux
+
+
+def infer_audio_policy(prompt: str) -> str:
+    lowered = (prompt or "").lower()
+    if any(marker.lower() in lowered for marker in COMPLETE_SILENCE_MARKERS):
+        return "disable"
+    return "require"
+
+
+def apply_audio_policy(workflow: dict[str, Any], prompt: str, policy: str = "auto") -> str:
+    """Keep native audio by default; remove only for an explicit silence request."""
+    resolved = infer_audio_policy(prompt) if policy == "auto" else policy
+    if resolved not in {"require", "allow", "disable"}:
+        raise RuntimeError(f"Unknown audio policy: {policy}")
+    if resolved == "require" and not has_native_audio_path(workflow):
+        raise RuntimeError("audio is required by the prompt, but the workflow has no native H3 audio path")
+    if resolved == "disable":
+        for node in workflow.values():
+            if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+                continue
+            if str(node.get("class_type", "")).lower() == "createvideo":
+                node["inputs"].pop("audio", None)
+    return resolved
+
+
+def config_fingerprint(workflow: dict[str, Any], prompt: str) -> str:
+    """Hash the effective graph and prompt so duplicate queued runs are detectable."""
+    payload = {"workflow": workflow, "prompt": prompt}
+    encoded = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def effective_workflow_settings(workflow: dict[str, Any]) -> dict[str, Any]:
+    """Extract the settings that matter for later media verification."""
+    settings: dict[str, Any] = {}
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        class_type = str(node.get("class_type", ""))
+        inputs = node["inputs"]
+        if class_type == "MiniMaxH3ImageToVideo":
+            for key in ("width", "height", "length"):
+                if key in inputs:
+                    settings[key] = inputs[key]
+        elif class_type == "BasicScheduler" and "steps" in inputs:
+            settings["steps"] = inputs["steps"]
+        elif class_type == "CreateVideo" and "fps" in inputs:
+            settings["fps"] = inputs["fps"]
+        elif class_type == "RandomNoise" and "noise_seed" in inputs:
+            settings["seed"] = inputs["noise_seed"]
+    if settings.get("length") is not None and settings.get("fps"):
+        settings["expected_duration_seconds"] = round(float(settings["length"]) / float(settings["fps"]), 4)
+    return settings
+
+
+def _sha256_file(path: Path) -> str | None:
+    if not path.exists() or not path.is_file():
+        return None
+    digest = hashlib.sha256()
+    try:
+        with path.open("rb") as handle:
+            for block in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(block)
+    except OSError:
+        return None
+    return digest.hexdigest()
+
+
+def default_run_root(output_dir: Path | None) -> Path | None:
+    if output_dir is None:
+        return None
+    if output_dir.name.lower() == "output":
+        return output_dir.parent / "user" / "h3lite_runs"
+    return output_dir / ".h3lite_runs"
+
+
+def active_manifest(run_root: Path | None, fingerprint: str) -> dict[str, Any] | None:
+    if run_root is None or not run_root.exists():
+        return None
+    try:
+        candidates = run_root.rglob("manifest.json")
+    except OSError:
+        return None
+    for manifest_path in candidates:
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            continue
+        if manifest.get("config_fingerprint") != fingerprint:
+            continue
+        # The atomic claim protects the short submitting window. Treat a
+        # leftover `submitting` manifest as retryable after a crashed process.
+        if manifest.get("state") in {"queued", "running"}:
+            manifest["manifest_path"] = str(manifest_path)
+            return manifest
+    return None
+
+
+def acquire_submission_claim(run_root: Path | None, fingerprint: str) -> Path | None:
+    """Atomically reserve a fingerprint while a process is submitting it."""
+    if run_root is None:
+        return None
+    run_root.mkdir(parents=True, exist_ok=True)
+    claim = run_root / f".{fingerprint}.submit.claim"
+    try:
+        with claim.open("x", encoding="utf-8") as handle:
+            handle.write(datetime.now(timezone.utc).isoformat())
+    except FileExistsError as exc:
+        try:
+            stale = time.time() - claim.stat().st_mtime > 2 * 60 * 60
+        except OSError:
+            stale = False
+        if stale:
+            try:
+                claim.unlink()
+                return acquire_submission_claim(run_root, fingerprint)
+            except OSError:
+                pass
+        raise RuntimeError("another process is preparing the same H3 configuration; wait for it or pass --allow-duplicate") from exc
+    return claim
+
+
+def release_submission_claim(claim: Path | None) -> None:
+    if claim is None:
+        return
+    try:
+        claim.unlink(missing_ok=True)
+    except OSError:
+        return
+
+
+def create_run_manifest(
+    run_root: Path | None,
+    *,
+    workflow: dict[str, Any],
+    prompt: str,
+    workflow_path: Path,
+    target: dict[str, Any],
+    args: argparse.Namespace,
+    audio_policy: str,
+    fingerprint: str,
+) -> tuple[Path | None, dict[str, Any]]:
+    if run_root is None:
+        return None, {}
+    run_root.mkdir(parents=True, exist_ok=True)
+    run_dir = run_root / (datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid.uuid4().hex[:8])
+    run_dir.mkdir(parents=True, exist_ok=False)
+    prompt_path = run_dir / "prompt.txt"
+    workflow_snapshot = run_dir / "workflow.api.json"
+    manifest_path = run_dir / "manifest.json"
+    prompt_path.write_text(prompt, encoding="utf-8")
+    workflow_snapshot.write_text(json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8")
+    record = {
+        "schema_version": 1,
+        "state": "submitting",
+        "config_fingerprint": fingerprint,
+        "workflow_sha256": _sha256_file(workflow_snapshot),
+        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "workflow_path": str(workflow_path),
+        "workflow_snapshot": str(workflow_snapshot),
+        "prompt_path": str(prompt_path),
+        "target": target,
+        "profile": args.profile,
+        "audio_policy": audio_policy,
+        "seed": args.seed,
+        "width": args.width,
+        "height": args.height,
+        "length": args.length,
+        "steps": args.steps,
+        "fps": args.fps,
+        "filename_prefix": args.filename_prefix,
+        "output_dir": str(Path(args.output_dir).expanduser().resolve()) if args.output_dir else None,
+        "effective_settings": effective_workflow_settings(workflow),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    record["run_dir"] = str(run_dir)
+    record["manifest_path"] = str(manifest_path)
+    manifest_path.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding="utf-8")
+    return manifest_path, record
+
+
+def update_manifest(manifest_path: Path | None, updates: dict[str, Any]) -> None:
+    if manifest_path is None or not manifest_path.exists():
+        return
+    try:
+        current = json.loads(manifest_path.read_text(encoding="utf-8"))
+        current.update(updates)
+        manifest_path.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    except (OSError, json.JSONDecodeError):
+        return
+
+
+def find_manifest(run_root: Path | None, prompt_id: str) -> Path | None:
+    if run_root is None or not run_root.exists():
+        return None
+    try:
+        for candidate in run_root.rglob("manifest.json"):
+            try:
+                value = json.loads(candidate.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                continue
+            if str(value.get("prompt_id", "")) == prompt_id:
+                return candidate
+    except OSError:
+        return None
+    return None
+
+
+def bypass_block_cache(workflow: dict[str, Any]) -> int:
+    """Reconnect downstream model consumers to the cache node's input model."""
+    cache_ids = {
+        str(node_id)
+        for node_id, node in workflow.items()
+        if isinstance(node, dict) and "blockcache" in str(node.get("class_type", "")).lower()
+    }
+    replacements: dict[str, list[Any]] = {}
+    for node_id in cache_ids:
+        inputs = workflow[node_id].get("inputs", {})
+        model_ref = inputs.get("model") if isinstance(inputs, dict) else None
+        if isinstance(model_ref, list) and len(model_ref) >= 2:
+            replacements[node_id] = model_ref
+    changed = 0
+    if not replacements:
+        return changed
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        for field, value in list(node["inputs"].items()):
+            if isinstance(value, list) and len(value) >= 2 and str(value[0]) in replacements:
+                node["inputs"][field] = list(replacements[str(value[0])])
+                changed += 1
+    return changed
+
+
+def apply_profile(workflow: dict[str, Any], profile: str) -> None:
+    """Apply conservative generation defaults; explicit CLI overrides win later."""
+    if profile not in PROFILE_STEPS:
+        raise RuntimeError(f"Unknown generation profile: {profile}")
+    steps = PROFILE_STEPS[profile]
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        if node.get("class_type") == "BasicScheduler" and "steps" in node["inputs"]:
+            node["inputs"]["steps"] = steps
+    if profile != "fast":
+        bypass_block_cache(workflow)
+
+
+def apply_overrides(workflow: dict[str, Any], args: argparse.Namespace) -> None:
+    """Apply safe, class-type-based overrides without hardcoding node ids."""
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        class_type = str(node.get("class_type", ""))
+        inputs = node["inputs"]
+        if args.seed is not None and class_type == "RandomNoise" and "noise_seed" in inputs:
+            inputs["noise_seed"] = args.seed
+        if class_type == "MiniMaxH3ImageToVideo":
+            if args.width is not None and "width" in inputs:
+                inputs["width"] = args.width
+            if args.height is not None and "height" in inputs:
+                inputs["height"] = args.height
+            if args.length is not None and "length" in inputs:
+                inputs["length"] = args.length
+        if args.steps is not None and class_type == "BasicScheduler" and "steps" in inputs:
+            inputs["steps"] = args.steps
+        if args.fps is not None and class_type == "CreateVideo" and "fps" in inputs:
+            inputs["fps"] = args.fps
+        if args.filename_prefix and class_type == "SaveVideo" and "filename_prefix" in inputs:
+            inputs["filename_prefix"] = args.filename_prefix
+
+
+def prompt_candidates(workflow: dict[str, Any]) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    field_words = {"prompt", "text", "positive", "description", "input_text", "text_positive", "caption"}
+    for node_id, node in workflow.items():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        class_type = str(node.get("class_type", ""))
+        class_lower = class_type.lower()
+        for field, value in node["inputs"].items():
+            if not isinstance(value, str):
+                continue
+            field_lower = str(field).lower()
+            score = 0
+            if field_lower == "prompt":
+                score += 100
+            elif field_lower in field_words:
+                score += 60
+            elif any(word in field_lower for word in ("prompt", "text", "caption", "description")):
+                score += 30
+            if "cliptextencode" in class_lower:
+                score += 25
+            if "prompt" in class_lower or "text" in class_lower:
+                score += 10
+            if score:
+                candidates.append({"node": str(node_id), "field": str(field), "score": score, "class_type": class_type, "current_length": len(value)})
+    return sorted(candidates, key=lambda item: (-item["score"], item["node"], item["field"]))
+
+
+def choose_prompt_target(workflow: dict[str, Any], node_id: str | None, field: str | None) -> dict[str, Any]:
+    if node_id is not None:
+        node_key = str(node_id)
+        if node_key not in workflow or not isinstance(workflow[node_key], dict):
+            raise RuntimeError(f"Prompt node {node_key!r} is not present in the workflow")
+        inputs = workflow[node_key].get("inputs")
+        if not isinstance(inputs, dict):
+            raise RuntimeError(f"Prompt node {node_key!r} has no inputs object")
+        if field:
+            if field not in inputs:
+                raise RuntimeError(f"Prompt field {field!r} is not present on node {node_key!r}")
+            if not isinstance(inputs[field], str):
+                raise RuntimeError(f"Prompt field {field!r} on node {node_key!r} is not a string input")
+            return {"node": node_key, "field": field, "class_type": workflow[node_key].get("class_type", "")}
+        preferred = [name for name in ("prompt", "text", "positive", "description") if isinstance(inputs.get(name), str)]
+        if len(preferred) == 1:
+            return {"node": node_key, "field": preferred[0], "class_type": workflow[node_key].get("class_type", "")}
+        if len(preferred) > 1:
+            raise RuntimeError(f"Node {node_key!r} has multiple string prompt-like inputs; pass --prompt-field")
+        raise RuntimeError(f"No prompt-like string input found on node {node_key!r}; pass --prompt-field")
+
+    candidates = prompt_candidates(workflow)
+    if field:
+        candidates = [candidate for candidate in candidates if candidate["field"] == field]
+    if not candidates:
+        raise RuntimeError("No prompt-like string input found; pass --prompt-node and --prompt-field")
+    best_score = candidates[0]["score"]
+    best = [candidate for candidate in candidates if candidate["score"] == best_score]
+    if len(best) != 1:
+        choices = ", ".join(f"{item['node']}.{item['field']} ({item['class_type']})" for item in candidates[:12])
+        raise RuntimeError(f"Prompt target is ambiguous. Pass --prompt-node/--prompt-field. Candidates: {choices}")
+    return best[0]
+
+
+def read_prompt(args: argparse.Namespace) -> str:
+    if args.prompt_file:
+        try:
+            return Path(args.prompt_file).expanduser().read_text(encoding="utf-8")
+        except OSError as exc:
+            raise RuntimeError(f"Cannot read prompt file {args.prompt_file}: {exc}") from exc
+    if args.prompt_text is not None:
+        return args.prompt_text
+    raise RuntimeError("Provide --prompt-file or --prompt-text")
+
+
+def history_record(history: Any, prompt_id: str) -> dict[str, Any] | None:
+    if not isinstance(history, dict):
+        return None
+    record = history.get(prompt_id)
+    return record if isinstance(record, dict) else None
+
+
+def execution_error(record: dict[str, Any]) -> str | None:
+    status = record.get("status")
+    if isinstance(status, dict):
+        messages = status.get("messages", [])
+        if isinstance(messages, list):
+            for message in messages:
+                if isinstance(message, list) and message:
+                    event = str(message[0]).lower()
+                    if "error" in event or "failed" in event:
+                        return json.dumps(message[1] if len(message) > 1 else message, ensure_ascii=False)
+                elif isinstance(message, dict) and any("error" in str(key).lower() for key in message):
+                    return json.dumps(message, ensure_ascii=False)
+        for key in ("error", "exception_message", "status_str"):
+            value = status.get(key)
+            if value and str(value).lower() in {"error", "failed"}:
+                return str(value)
+    for key in ("error", "exception_message"):
+        if record.get(key):
+            return str(record[key])
+    return None
+
+
+def execution_elapsed_seconds(record: dict[str, Any]) -> float | None:
+    """Read ComfyUI execution timestamps when the server exposes them."""
+    status = record.get("status") if isinstance(record, dict) else None
+    messages = status.get("messages", []) if isinstance(status, dict) else []
+    timestamps: dict[str, int] = {}
+    if isinstance(messages, list):
+        for message in messages:
+            if not isinstance(message, list) or len(message) < 2 or not isinstance(message[1], dict):
+                continue
+            event = str(message[0])
+            timestamp = message[1].get("timestamp")
+            if isinstance(timestamp, (int, float)):
+                timestamps[event] = int(timestamp)
+    start = timestamps.get("execution_start")
+    end = timestamps.get("execution_success") or timestamps.get("execution_error")
+    if start is None or end is None or end < start:
+        return None
+    return round((end - start) / 1000.0, 2)
+
+
+def wait_for_completion(base_url: str, prompt_id: str, timeout: float, interval: float) -> dict[str, Any]:
+    started = time.monotonic()
+    last_status = "queued"
+    while time.monotonic() - started < timeout:
+        history = json_request(base_url, f"/history/{prompt_id}")
+        record = history_record(history, prompt_id)
+        if record:
+            status = record.get("status")
+            if isinstance(status, dict):
+                last_status = str(status.get("status_str", last_status))
+                error = execution_error(record)
+                if error:
+                    raise RuntimeError(f"ComfyUI execution failed: {error}")
+                if status.get("completed") is True:
+                    return record
+            if "outputs" in record and isinstance(record["outputs"], dict):
+                return record
+        time.sleep(max(0.25, interval))
+    raise TimeoutError(f"Timed out after {timeout:.0f}s waiting for {prompt_id}; last status: {last_status}")
+
+
+def output_entries(value: Any) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    if isinstance(value, dict):
+        if isinstance(value.get("filename"), str):
+            entries.append(value)
+        for child in value.values():
+            entries.extend(output_entries(child))
+    elif isinstance(value, list):
+        for child in value:
+            entries.extend(output_entries(child))
+    return entries
+
+
+def resolve_output_paths(record: dict[str, Any], output_dir: Path | None) -> list[Path]:
+    if not output_dir or not isinstance(record.get("outputs"), dict):
+        return []
+    paths: list[Path] = []
+    seen: set[str] = set()
+    for entry in output_entries(record["outputs"]):
+        filename = entry["filename"]
+        subfolder = str(entry.get("subfolder", ""))
+        candidate = output_dir / subfolder / filename
+        key = str(candidate.resolve())
+        if key not in seen:
+            seen.add(key)
+            paths.append(candidate)
+    return paths
+
+
+def ffprobe(path: Path) -> dict[str, Any] | None:
+    executable = shutil.which("ffprobe")
+    if not executable or not path.exists():
+        return None
+    command = [
+        executable,
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration:stream=codec_type,codec_name,width,height,nb_frames,r_frame_rate,avg_frame_rate,channels,sample_rate",
+        "-of",
+        "json",
+        str(path),
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20, check=False)
+        if completed.returncode != 0:
+            return {"error": completed.stderr.strip()[-1000:]}
+        return json.loads(completed.stdout)
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as exc:
+        return {"error": str(exc)}
+
+
+def _numeric(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _frame_rate(stream: dict[str, Any]) -> float | None:
+    for key in ("avg_frame_rate", "r_frame_rate"):
+        value = str(stream.get(key, ""))
+        if "/" in value:
+            numerator, denominator = value.split("/", 1)
+            try:
+                if float(denominator):
+                    return float(numerator) / float(denominator)
+            except ValueError:
+                continue
+        result = _numeric(value)
+        if result is not None:
+            return result
+    return None
+
+
+def verify_outputs(
+    paths: list[Path],
+    *,
+    expected_duration: float | None = None,
+    expected_frames: int | None = None,
+    expected_fps: float | None = None,
+    require_audio: bool = False,
+) -> list[dict[str, Any]]:
+    verified: list[dict[str, Any]] = []
+    for path in paths:
+        item: dict[str, Any] = {
+            "path": str(path),
+            "exists": path.exists(),
+            "expected_duration_seconds": expected_duration,
+            "expected_frames": expected_frames,
+            "expected_fps": expected_fps,
+            "audio_required": require_audio,
+        }
+        if path.exists():
+            try:
+                item["size_bytes"] = path.stat().st_size
+            except OSError:
+                item["size_bytes"] = None
+            item["ffprobe"] = ffprobe(path)
+            probe = item.get("ffprobe")
+            if isinstance(probe, dict):
+                streams = probe.get("streams", [])
+                if isinstance(streams, list):
+                    video_streams = [stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "video"]
+                    audio_streams = [stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "audio"]
+                    item["has_video"] = bool(video_streams)
+                    item["has_audio"] = bool(audio_streams)
+                    if video_streams:
+                        video = video_streams[0]
+                        item["video_width"] = video.get("width")
+                        item["video_height"] = video.get("height")
+                        item["frame_count"] = _numeric(video.get("nb_frames"))
+                        item["fps"] = _frame_rate(video)
+                    duration = _numeric(probe.get("format", {}).get("duration")) if isinstance(probe.get("format"), dict) else None
+                    item["duration_seconds"] = duration
+                    if expected_duration is not None and duration is not None:
+                        item["duration_delta_seconds"] = round(abs(duration - expected_duration), 4)
+                    if expected_fps is not None and item.get("fps") is not None:
+                        item["fps_delta"] = round(abs(float(item["fps"]) - expected_fps), 4)
+                    if expected_frames is not None and item.get("frame_count") is not None:
+                        item["frame_delta"] = int(item["frame_count"]) - int(expected_frames)
+        duration_ok = True
+        frames_ok = True
+        fps_ok = True
+        if expected_duration is not None and item.get("duration_seconds") is not None:
+            duration_ok = float(item["duration_delta_seconds"]) <= max(0.25, expected_duration * 0.08)
+        if expected_frames is not None and item.get("frame_count") is not None:
+            frames_ok = abs(int(item["frame_delta"])) <= 2
+        if expected_fps is not None and item.get("fps") is not None:
+            fps_ok = float(item["fps_delta"]) <= 0.25
+        item["duration_ok"] = duration_ok
+        item["frames_ok"] = frames_ok
+        item["fps_ok"] = fps_ok
+        item["audio_ok"] = bool(item.get("has_audio")) if require_audio else True
+        item["verified"] = bool(item.get("exists") and item.get("has_video") and duration_ok and frames_ok and fps_ok and item["audio_ok"])
+        verified.append(item)
+    return verified
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
+    parser.add_argument("--workflow", help="ComfyUI API-format workflow JSON")
+    parser.add_argument("--workflow-template", default="h3_w4a8_t2v", choices=["h3_w4a8_t2v"], help="bundled workflow used when --workflow is omitted")
+    prompt_group = parser.add_mutually_exclusive_group(required=True)
+    prompt_group.add_argument("--prompt-file", help="UTF-8 text file containing the H3 prompt")
+    prompt_group.add_argument("--prompt-text", help="prompt text supplied directly on the command line")
+    parser.add_argument("--prompt-node", help="node id whose prompt input should be replaced")
+    parser.add_argument("--prompt-field", help="input field on the prompt node, such as prompt or text")
+    parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
+    parser.add_argument("--filename-prefix", help="override SaveVideo filename_prefix")
+    parser.add_argument("--profile", choices=["fast", "balanced", "quality"], default="fast", help="generation intent; fast is the validated default")
+    parser.add_argument("--seed", type=int, help="override RandomNoise noise_seed")
+    parser.add_argument("--resolution", help="override H3 canvas as WIDTHxHEIGHT; dimensions are aligned to 32")
+    parser.add_argument("--width", type=int, help="override H3 video width")
+    parser.add_argument("--height", type=int, help="override H3 video height")
+    parser.add_argument("--length", type=int, help="override H3 frame count")
+    parser.add_argument("--steps", type=int, help="override BasicScheduler steps")
+    parser.add_argument("--fps", type=float, help="override CreateVideo fps")
+    parser.add_argument("--disable-block-cache", action="store_true", help="bypass optional H3 block-cache acceleration")
+    parser.add_argument("--audio-policy", choices=["auto", "require", "allow", "disable"], default="auto", help="auto keeps native audio unless complete silence is explicit")
+    parser.add_argument("--run-root", help="directory for prompt/workflow/config manifests; defaults beside ComfyUI output")
+    parser.add_argument("--allow-duplicate", action="store_true", help="allow an identical queued/running configuration to be submitted again")
+    parser.add_argument("--timeout", type=float, default=3600.0, help="maximum wait time in seconds")
+    parser.add_argument("--poll-interval", type=float, default=2.0, help="history polling interval in seconds")
+    parser.add_argument("--dry-run", action="store_true", help="print the mutated workflow without submitting it")
+    parser.add_argument("--queue-only", action="store_true", help="submit and return prompt_id immediately without waiting")
+    parser.add_argument("--json", action="store_true", help="print a machine-readable result")
+    return parser.parse_args()
+
+
+def main() -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+    args = parse_args()
+    started_at = datetime.now(timezone.utc)
+    started = time.monotonic()
+    manifest_path: Path | None = None
+    claim_path: Path | None = None
+    try:
+        workflow_path = Path(args.workflow).expanduser().resolve() if args.workflow else default_workflow_path(args.workflow_template)
+        workflow = load_workflow(workflow_path)
+        apply_profile(workflow, args.profile)
+        if args.resolution:
+            width, height = parse_resolution(args.resolution)
+            if args.width is None:
+                args.width = width
+            if args.height is None:
+                args.height = height
+        if args.disable_block_cache:
+            bypass_block_cache(workflow)
+        prompt = read_prompt(args)
+        target = choose_prompt_target(workflow, args.prompt_node, args.prompt_field)
+        workflow[str(target["node"])]["inputs"][str(target["field"])] = prompt
+        apply_overrides(workflow, args)
+        resolved_audio_policy = apply_audio_policy(workflow, prompt, args.audio_policy)
+        if args.dry_run:
+            result = {
+                "dry_run": True,
+                "workflow_path": str(workflow_path),
+                "target": target,
+                "audio_policy": resolved_audio_policy,
+                "config_fingerprint": config_fingerprint(workflow, prompt),
+                "effective_settings": effective_workflow_settings(workflow),
+                "workflow": workflow,
+            }
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+            return 0
+
+        output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
+        run_root = Path(args.run_root).expanduser().resolve() if args.run_root else default_run_root(output_dir)
+        fingerprint = config_fingerprint(workflow, prompt)
+        if not args.allow_duplicate:
+            claim_path = acquire_submission_claim(run_root, fingerprint)
+            existing = active_manifest(run_root, fingerprint)
+            if existing:
+                result = {
+                    "ok": True,
+                    "queued": False,
+                    "deduplicated": True,
+                    "prompt_id": existing.get("prompt_id"),
+                    "run_manifest": existing.get("manifest_path"),
+                    "config_fingerprint": fingerprint,
+                    "message": "an identical configuration is already queued or running; submission skipped",
+                }
+                if args.json:
+                    print(json.dumps(result, ensure_ascii=False, indent=2))
+                else:
+                    print(f"Existing active prompt {existing.get('prompt_id')}; duplicate submission skipped")
+                return 0
+
+        manifest_path, _ = create_run_manifest(
+            run_root,
+            workflow=workflow,
+            prompt=prompt,
+            workflow_path=workflow_path,
+            target=target,
+            args=args,
+            audio_policy=resolved_audio_policy,
+            fingerprint=fingerprint,
+        )
+        client_id = str(uuid.uuid4())
+        try:
+            queued = json_request(args.base_url, "/prompt", method="POST", payload={"prompt": workflow, "client_id": client_id})
+        except Exception:
+            update_manifest(manifest_path, {"state": "failed", "failed_at_utc": datetime.now(timezone.utc).isoformat()})
+            raise
+        prompt_id = str(queued.get("prompt_id", "")) if isinstance(queued, dict) else ""
+        if not prompt_id:
+            update_manifest(manifest_path, {"state": "failed", "error": "ComfyUI did not return prompt_id"})
+            raise RuntimeError(f"ComfyUI did not return prompt_id: {json.dumps(queued, ensure_ascii=False)[:1500]}")
+        update_manifest(
+            manifest_path,
+            {
+                "state": "queued",
+                "prompt_id": prompt_id,
+                "client_id": client_id,
+                "queued_at_utc": started_at.isoformat(),
+            },
+        )
+        if args.queue_only:
+            result = {
+                "ok": True,
+                "queued": True,
+                "prompt_id": prompt_id,
+                "client_id": client_id,
+                "workflow_path": str(workflow_path),
+                "target": target,
+                "audio_policy": resolved_audio_policy,
+                "config_fingerprint": fingerprint,
+                "run_manifest": str(manifest_path) if manifest_path else None,
+                "queued_at_utc": started_at.isoformat(),
+            }
+            if args.json:
+                print(json.dumps(result, ensure_ascii=False, indent=2))
+            else:
+                print(f"Queued prompt {prompt_id}")
+            return 0
+        record = wait_for_completion(args.base_url, prompt_id, args.timeout, args.poll_interval)
+        output_paths = resolve_output_paths(record, output_dir)
+        settings = effective_workflow_settings(workflow)
+        verified = verify_outputs(
+            output_paths,
+            expected_duration=settings.get("expected_duration_seconds"),
+            expected_frames=settings.get("length"),
+            expected_fps=settings.get("fps"),
+            require_audio=resolved_audio_policy == "require",
+        )
+        verification_ok = bool(verified) and all(item.get("verified") is True for item in verified)
+        result = {
+            "ok": verification_ok,
+            "prompt_id": prompt_id,
+            "client_id": client_id,
+            "target": target,
+            "started_at_utc": started_at.isoformat(),
+            "elapsed_seconds": round(time.monotonic() - started, 2),
+            "comfyui_execution_seconds": execution_elapsed_seconds(record),
+            "audio_policy": resolved_audio_policy,
+            "config_fingerprint": fingerprint,
+            "run_manifest": str(manifest_path) if manifest_path else None,
+            "outputs": verified,
+            "history": record,
+        }
+        update_manifest(
+            manifest_path,
+            {
+                "state": "success" if verification_ok else "verification_failed",
+                "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                "elapsed_seconds": result["elapsed_seconds"],
+                "comfyui_execution_seconds": result["comfyui_execution_seconds"],
+                "outputs": verified,
+            },
+        )
+        if output_dir:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            report_path = output_dir / f"h3_generation_report_{prompt_id}.json"
+            report_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+            result["report_path"] = str(report_path)
+        if args.json:
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(f"Completed prompt {prompt_id} in {result['elapsed_seconds']:.1f}s")
+            if target:
+                print(f"Prompt input: {target['node']}.{target['field']}")
+            if verified:
+                for item in verified:
+                    print(f"Output: {item['path']} | exists={item['exists']} | video={item.get('has_video', 'unknown')} | audio={item.get('has_audio', 'unknown')}")
+            else:
+                print("ComfyUI completed, but no local output path was resolved. Check the workflow output directory.")
+        return 0 if verification_ok else 2
+    except KeyboardInterrupt:
+        update_manifest(manifest_path, {"state": "interrupted", "updated_at_utc": datetime.now(timezone.utc).isoformat()})
+        print("Interrupted while waiting for ComfyUI", file=sys.stderr)
+        return 130
+    except Exception as exc:
+        update_manifest(manifest_path, {"state": "failed", "error": str(exc), "updated_at_utc": datetime.now(timezone.utc).isoformat()})
+        if args.json:
+            print(json.dumps({"ok": False, "error": str(exc), "elapsed_seconds": round(time.monotonic() - started, 2)}, ensure_ascii=False))
+        else:
+            print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    finally:
+        release_submission_claim(claim_path)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

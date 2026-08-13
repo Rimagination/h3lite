@@ -1,0 +1,4 @@
+interface:
+  display_name: "H3 Lite"
+  short_description: "低显存部署、组件路径配置、硬件自适应生成与提示词编排"
+  default_prompt: "Use $h3lite to diagnose this computer, configure the best local MiniMax H3 profile, and generate a video from my idea."

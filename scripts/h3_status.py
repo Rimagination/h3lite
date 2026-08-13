@@ -1,0 +1,294 @@
+#!/usr/bin/env python3
+"""One-shot status and output verification for a queued ComfyUI prompt.
+
+Run this command repeatedly from an agent instead of holding a foreground
+process open for the full low-VRAM generation. It performs one HTTP request
+cycle and exits quickly, so the caller can provide progress updates without
+being killed by a terminal command timeout.
+"""
+
+from __future__ import annotations
+
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import time
+
+from h3_generate import (
+    execution_error,
+    execution_elapsed_seconds,
+    default_run_root,
+    find_manifest,
+    history_record,
+    json_request,
+    resolve_output_paths,
+    update_manifest,
+    verify_outputs,
+)
+from h3_plan import record_timing_sample
+
+
+def analyze_frame_samples(samples: list[bytes]) -> dict[str, object]:
+    """Classify sampled grayscale frames without requiring Pillow or NumPy."""
+    usable = [sample for sample in samples if sample]
+    if not usable:
+        return {"classification": "unavailable", "sample_count": 0, "max_mean_delta": None}
+    means = [sum(sample) / len(sample) for sample in usable]
+    deltas: list[float] = []
+    for previous, current in zip(usable, usable[1:]):
+        size = min(len(previous), len(current))
+        if size:
+            deltas.append(sum(abs(previous[index] - current[index]) for index in range(size)) / size)
+    max_delta = max(deltas, default=0.0)
+    if max(means) <= 3:
+        classification = "black_or_flat"
+    elif max_delta < 1.0:
+        classification = "static_or_nearly_static"
+    else:
+        classification = "dynamic"
+    return {
+        "classification": classification,
+        "sample_count": len(usable),
+        "mean_brightness": [round(value, 2) for value in means],
+        "mean_deltas": [round(value, 2) for value in deltas],
+        "max_mean_delta": round(max_delta, 2),
+    }
+
+
+def extract_gray_frame(path: Path, timestamp: float, size: int = 64) -> bytes | None:
+    executable = shutil.which("ffmpeg")
+    if not executable or not path.exists():
+        return None
+    command = [
+        executable,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{max(0.0, timestamp):.3f}",
+        "-i",
+        str(path),
+        "-frames:v",
+        "1",
+        "-vf",
+        f"scale={size}:{size}:force_original_aspect_ratio=decrease,pad={size}:{size}:(ow-iw)/2:(oh-ih)/2,format=gray",
+        "-f",
+        "rawvideo",
+        "-pix_fmt",
+        "gray",
+        "pipe:1",
+    ]
+    try:
+        completed = subprocess.run(command, capture_output=True, timeout=20, check=False)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return completed.stdout if completed.returncode == 0 and completed.stdout else None
+
+
+def dynamic_video_quality(path: Path, duration: float | None) -> dict[str, object]:
+    if duration is None or duration <= 0:
+        return {"classification": "unavailable", "error": "video duration is unavailable"}
+    timestamps = [0.0, max(0.01, duration / 2), max(0.01, duration - 0.05)]
+    samples = [extract_gray_frame(path, timestamp) for timestamp in timestamps]
+    if any(sample is None for sample in samples):
+        return {"classification": "unavailable", "error": "ffmpeg could not extract all QA frames", "timestamps": timestamps}
+    result = analyze_frame_samples([sample for sample in samples if sample is not None])
+    result["timestamps"] = timestamps
+    return result
+
+
+def compact_result(result: dict[str, object]) -> dict[str, object]:
+    """Remove ComfyUI's large history graph from normal agent-facing output."""
+    state = str(result.get("state", "unknown"))
+    complete = state in {"success", "verification_failed", "error"}
+    visible: dict[str, object] = {
+        key: value
+        for key, value in result.items()
+        if key not in {"history", "status", "outputs"}
+    }
+    if state == "running_or_queued":
+        visible["state"] = "queued_or_running"
+    visible["complete"] = complete
+    visible["ok"] = bool(result.get("ok")) if complete else False
+    outputs = result.get("outputs")
+    if isinstance(outputs, list):
+        compact_outputs: list[dict[str, object]] = []
+        for item in outputs:
+            if not isinstance(item, dict):
+                continue
+            compact_outputs.append(
+                {
+                    key: item.get(key)
+                    for key in (
+                        "path",
+                        "exists",
+                        "has_video",
+                        "has_audio",
+                        "video_width",
+                        "video_height",
+                        "duration_seconds",
+                        "frame_count",
+                        "fps",
+                        "duration_ok",
+                        "frames_ok",
+                        "fps_ok",
+                        "audio_ok",
+                        "verified",
+                        "dynamic_qa",
+                    )
+                    if key in item
+                }
+            )
+        visible["outputs"] = compact_outputs
+    return visible
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--prompt-id", required=True, help="ComfyUI prompt_id returned by h3_generate.py --queue-only")
+    parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
+    parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
+    parser.add_argument("--run-manifest", help="specific h3lite run manifest to update and use for expected settings")
+    parser.add_argument("--run-root", help="run-manifest root used to locate a manifest by prompt id")
+    parser.add_argument("--expected-duration", type=float, help="expected video duration in seconds")
+    parser.add_argument("--expected-frames", type=int, help="expected video frame count")
+    parser.add_argument("--expected-fps", type=float, help="expected video FPS")
+    parser.add_argument("--require-audio", action="store_true", help="fail verification when the MP4 has no audio stream")
+    parser.add_argument("--dynamic-check", action="store_true", help="sample first/middle/last frames and reject static or black output")
+    parser.add_argument("--compact", action="store_true", help="use the default compact result format")
+    parser.add_argument("--verbose", action="store_true", help="include the full ComfyUI history graph in output")
+    parser.add_argument("--watch", action="store_true", help="poll until the prompt completes")
+    parser.add_argument("--watch-interval", type=float, default=20.0, help="seconds between --watch polls")
+    parser.add_argument("--watch-timeout", type=float, default=3600.0, help="maximum seconds for --watch")
+    parser.add_argument("--json", action="store_true", help="print a machine-readable result")
+    return parser.parse_args()
+
+
+def status_once(args: argparse.Namespace) -> dict[str, object]:
+    output_dir = Path(args.output_dir).expanduser().resolve() if args.output_dir else None
+    run_root = Path(args.run_root).expanduser().resolve() if args.run_root else default_run_root(output_dir)
+    manifest_path = Path(args.run_manifest).expanduser().resolve() if args.run_manifest else find_manifest(run_root, args.prompt_id)
+    manifest: dict[str, object] = {}
+    if manifest_path and manifest_path.exists():
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            manifest = {}
+    if output_dir is None and manifest.get("output_dir"):
+        output_dir = Path(str(manifest["output_dir"])).expanduser().resolve()
+    settings = manifest.get("effective_settings") if isinstance(manifest.get("effective_settings"), dict) else {}
+    expected_duration = args.expected_duration if args.expected_duration is not None else settings.get("expected_duration_seconds")
+    expected_frames = args.expected_frames if args.expected_frames is not None else settings.get("length")
+    expected_fps = args.expected_fps if args.expected_fps is not None else settings.get("fps")
+    require_audio = args.require_audio or manifest.get("audio_policy") == "require"
+    history = json_request(args.base_url, f"/history/{args.prompt_id}")
+    record = history_record(history, args.prompt_id)
+    if record is None:
+        result = {"ok": False, "complete": False, "prompt_id": args.prompt_id, "state": "running_or_queued"}
+        update_manifest(manifest_path, {"state": "running", "last_checked_at_utc": datetime.now(timezone.utc).isoformat()})
+    else:
+        error = execution_error(record)
+        status = record.get("status") if isinstance(record, dict) else None
+        if error:
+            result = {"ok": False, "complete": True, "prompt_id": args.prompt_id, "state": "error", "error": error, "history": record}
+            update_manifest(manifest_path, {"state": "failed", "error": error})
+        elif isinstance(status, dict) and status.get("completed") is True:
+            paths = resolve_output_paths(record, output_dir)
+            outputs = verify_outputs(
+                paths,
+                expected_duration=float(expected_duration) if expected_duration is not None else None,
+                expected_frames=int(expected_frames) if expected_frames is not None else None,
+                expected_fps=float(expected_fps) if expected_fps is not None else None,
+                require_audio=require_audio,
+            )
+            if args.dynamic_check:
+                for item in outputs:
+                    if item.get("has_video") and item.get("duration_seconds") is not None:
+                        qa = dynamic_video_quality(Path(str(item["path"])), float(item["duration_seconds"]))
+                        item["dynamic_qa"] = qa
+                        item["verified"] = bool(item.get("verified") and qa.get("classification") == "dynamic")
+            outputs_ok = bool(outputs) and all(item.get("verified") is True for item in outputs)
+            state = "success" if outputs_ok else "verification_failed"
+            elapsed_seconds = execution_elapsed_seconds(record)
+            result = {
+                "ok": outputs_ok,
+                "complete": True,
+                "prompt_id": args.prompt_id,
+                "state": state,
+                "elapsed_seconds": elapsed_seconds,
+                "expected_duration_seconds": expected_duration,
+                "expected_frames": expected_frames,
+                "expected_fps": expected_fps,
+                "audio_policy": manifest.get("audio_policy", "require" if require_audio else "allow"),
+                "require_audio": require_audio,
+                "dynamic_check": args.dynamic_check,
+                "outputs": outputs,
+                "history": record,
+            }
+            update_manifest(manifest_path, {"state": state, "elapsed_seconds": elapsed_seconds, "outputs": outputs})
+            if outputs_ok:
+                record_timing_sample(run_root, manifest_path, elapsed_seconds)
+        else:
+            status_name = status.get("status_str") if isinstance(status, dict) else None
+            state = "running" if status_name in {"running", "executing"} else "queued"
+            result = {"ok": False, "complete": False, "prompt_id": args.prompt_id, "state": state}
+            update_manifest(manifest_path, {"state": "running" if state == "running" else "queued"})
+    return result
+
+
+def _print_result(result: dict[str, object], args: argparse.Namespace) -> int:
+    visible = result if args.verbose else compact_result(result)
+    if args.json:
+        print(json.dumps(visible, ensure_ascii=False, indent=2))
+    else:
+        print(f"{visible.get('state', 'unknown')}: {args.prompt_id}")
+        for item in visible.get("outputs", []):
+            print(
+                f"Output: {item.get('path')} | {item.get('video_width', '?')}x{item.get('video_height', '?')} | "
+                f"duration={item.get('duration_seconds', '?')}s | audio={item.get('has_audio', 'unknown')} | verified={item.get('verified', 'unknown')}"
+            )
+    return 0 if visible.get("ok") or not visible.get("complete", True) else 1
+
+
+def main() -> int:
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+    args = parse_args()
+    try:
+        if args.watch:
+            started = time.monotonic()
+            last_state = None
+            while True:
+                result = status_once(args)
+                if not args.json and result.get("state") != last_state:
+                    print(f"{result.get('state', 'unknown')}: {args.prompt_id}")
+                    last_state = result.get("state")
+                if result.get("complete"):
+                    return _print_result(result, args)
+                if time.monotonic() - started >= max(1.0, args.watch_timeout):
+                    timeout_result = {
+                        "ok": False,
+                        "complete": True,
+                        "prompt_id": args.prompt_id,
+                        "state": "watch_timeout",
+                        "error": f"watch exceeded {args.watch_timeout:.0f} seconds",
+                    }
+                    return _print_result(timeout_result, args)
+                time.sleep(max(1.0, args.watch_interval))
+        return _print_result(status_once(args), args)
+    except Exception as exc:
+        if args.json:
+            print(json.dumps({"ok": False, "complete": True, "prompt_id": args.prompt_id, "state": "error", "error": str(exc)}, ensure_ascii=False))
+        else:
+            print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
