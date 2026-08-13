@@ -138,7 +138,7 @@ https://github.com/Rimagination/h3lite
 #### 组件集
 
 H3 Lite 提供两套完整组件集：运行时通过 `--component-set A`
-或 `--component-set B` 选择一套完整组合。Set B 的自动路线使用兼容工作流；Set A 在加速节点齐全时使用 fast 工作流。
+或 `--component-set B` 选择一套完整组合。Set B 的兼容工作流已经实测验证，自动路线会使用它；尚未升为默认的只是 Set B 的可选 Sage/Sol/Chunk/T8 加速图。Set A 在加速节点齐全时使用 fast 工作流。
 
 Set B 曾出现“文件大小正确但内容损坏”的 W4A8 主模型，结果是彩色马赛克。H3 Lite 会在首次使用或文件变化后校验已登记的 SHA-256，并缓存结果；正常复跑不会重复计算大文件哈希。
 
@@ -257,7 +257,7 @@ Model weights, ComfyUI, and third-party custom nodes come from their respective 
 
 #### Component sets
 
-H3 Lite provides two complete component sets. Select one with `--component-set A` or `--component-set B`; Set B uses the compatibility workflow by default, while Set A uses the fast workflow when its acceleration nodes are loaded.
+H3 Lite provides two complete component sets. Select one with `--component-set A` or `--component-set B`. Set B's compatibility workflow is validated and selected automatically; only its optional Sage/Sol/Chunk/T8 acceleration graph is not yet the default. Set A uses the fast workflow when its acceleration nodes are loaded.
 
 A Set B W4A8 checkpoint once had the correct byte size but corrupted contents and produced colored mosaic frames. H3 Lite verifies registered SHA-256 values on first use or after a file changes, then caches the result so normal reruns do not rehash large files.
 

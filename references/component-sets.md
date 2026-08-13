@@ -27,11 +27,12 @@ not require a separate model download.
 
 The command-line ID is `validated-low-vram-a` (short alias `A`).
 
-## Set B — portable 16 GB candidate
+## Set B — validated portable W4A8 route
 
-This combination completed a real RTX 4060 Ti 16 GB installation and video
-generation, but it is a separate route rather than an automatic replacement
-for Set A.
+This combination produced coherent video with native audio on both an RTX
+4060 Ti 16 GB desktop in `NORMAL_VRAM` mode and an RTX 4070 Laptop 8 GB system
+in `LOW_VRAM` mode. The compatibility workflow is validated; this remains a
+separate route rather than an automatic replacement for Set A.
 
 | Role | File | Source / expected bytes |
 | --- | --- | --- |
@@ -45,9 +46,10 @@ for Set A.
 Pin the exact workflow and node revisions used by this set in its environment
 manifest. Do not silently select it through a loose filename match.
 
-The command-line ID is `portable-16gb-b` (short alias `B`). In `auto` mode,
-H3 Lite currently keeps this set on the compatibility workflow until a pinned
-accelerated run records the full Sage/Sol/Chunk/T8 chain. Use
+The command-line ID remains `portable-16gb-b` (short alias `B`) for backward
+compatibility; the word `portable` does not mean unvalidated. In `auto` mode,
+H3 Lite keeps this validated set on its validated compatibility workflow until
+a pinned accelerated run records the full Sage/Sol/Chunk/T8 chain. Use
 `--acceleration fast` only for an intentional comparison. If both Set A and
 Set B are installed, pass `--component-set A` or `--component-set B`; do not
 let a filename heuristic choose between them.

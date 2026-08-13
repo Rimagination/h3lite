@@ -252,9 +252,11 @@ Cache are optional unless the selected accelerated graph explicitly uses them.
 `/object_info` when available and uses the accelerated T2V or I2V graph only
 when the Sage, Sol, Chunk Feed Forward, and T8 classes are actually loaded.
 Pass `--component-set A` or `--component-set B` when both complete sets are
-installed. Set B currently defaults to the compatibility graph in `auto` mode
-until a pinned accelerated run is recorded; use `--acceleration fast` only for
-an intentional trial. Use `--acceleration compat` to force the fallback graph.
+installed. Set B is validated with the compatibility graph on RTX 4060 Ti
+16 GB and RTX 4070 Laptop 8 GB systems, so `auto` selects that graph. Its full
+Sage/Sol/Chunk/T8 acceleration chain is not yet the validated default; use
+`--acceleration fast` only for an intentional trial. Use `--acceleration
+compat` to force the validated compatibility graph.
 Both graphs preserve the H3 sampler, native audio, ClipProj, LoRA, dual VAEs,
 and native first/last-frame inputs without optional patches.
 
