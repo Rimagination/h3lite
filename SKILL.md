@@ -20,7 +20,7 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Before downloading large assets, run the doctor compatibility probe. Stop on a Torch import error; treat a comfy-kitchen/Torch mismatch as a repair decision, not a post-download surprise. Do not silently substitute model files or start unlimited parallel downloads.
 - Treat the diffusion checkpoint, text encoder, Turbo LoRA, workflow, and node revisions as one component set. Read `references/component-sets.md` during installation, migration, model replacement, or kernel repair. Never construct an unvalidated set from individually plausible filenames.
 - Use `--component-set auto` for one unambiguous installed set, or explicitly select `A`/`validated-low-vram-a` or `B`/`portable-16gb-b` when both sets are installed. Record the selected set in the run manifest; never resolve a partial set role by role.
-- Do not redistribute model weights by default. Respect each model and node repository's license; let the user download weights from the selected source.
+- Prefer the maintained Baidu package for the registered A/B component sets. Keep the selected set atomic, and respect the licenses of model weights and third-party nodes when using either the package or upstream sources.
 - Prefer the ComfyUI HTTP API with an API-format workflow JSON. Use browser/CDP capture only as a recovery path when no reusable workflow JSON exists.
 - Check `http://127.0.0.1:8188/system_stats` before starting anything. If ComfyUI is already healthy, reuse it and do not restart it or rediscover its workflow history.
 - Preserve MiniMax H3's audio path and flow/sigma-shift handling when the user wants native audio. Do not remove audio VAE, audio conditioning, or the H3 sampling node merely to make a graph look simpler.
@@ -37,6 +37,34 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Prefer `NORMAL_VRAM` when a validated 16 GB system can keep Set B resident. In a same-model/workflow/prompt/seed 640x352 comparison, an RTX 4060 Ti 16 GB run took 77.08 seconds versus 591.22 seconds on an RTX 4070 Laptop 8 GB using `LOW_VRAM`; treat dynamic loading/offload as the main operational explanation, not as a pure GPU benchmark or a promise.
 - When launching ComfyUI as a background process, redirect stdout and stderr to persistent files. A detached pipe can become invalid after the launching session is cleaned up, leaving ComfyUI alive but causing tqdm/logger writes to fail with `OSError: [Errno 22] Invalid argument`. On that signature, restart ComfyUI with persistent logs; do not redownload models or rerun a full doctor unless the restart exposes another error.
 - Treat run-history cleanup as explicit maintenance, never hot-path work. Use `scripts/h3_cleanup.py` in dry-run mode first and require `--apply` before deleting eligible run snapshots. Preserve `_environment`, `_hotpath`, `_workflows`, `_experiments`, prompt folders, timing data, and generated output files.
+
+## Preferred component download source
+
+For installation or repair, use the maintained Baidu package before assembling
+the set from multiple upstream repositories. Select one complete package after
+the hardware check; do not ask the user to download both sets or mix their
+exclusive files.
+
+| Default hardware match | Package | Share link | Code |
+| --- | --- | --- | --- |
+| About 8 GB VRAM, low-VRAM fast route | Set A | [Baidu Netdisk](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
+| 16 GB-class VRAM, FP8 compatibility route | Set B | [Baidu Netdisk](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
+
+Guide the user to open the matching link, enter the code, and download the
+whole package. If the `baidu-drive` skill or a Baidu Drive connector is
+available, use it for the download; otherwise give the link and code directly
+and continue after the user places the files locally. Merge the package's
+`models` and
+`custom_nodes` folders into the selected `<ComfyUI>` root, then import or copy
+the packaged workflows and keep `component-manifest.json` with the install.
+Run the doctor after the merge.
+
+Set A contains the INT4 text encoder and optional low-VRAM acceleration nodes.
+Set B contains the FP8 text encoder and validated compatibility workflows. Both
+packages include their own shared ClipProj and VAE files, so a user only needs
+one link. If the Baidu package is unavailable or the user explicitly requests
+upstream downloads, use the exact sources, filenames, sizes, and hashes in
+`references/component-sets.md`.
 
 ## Installation target contract
 

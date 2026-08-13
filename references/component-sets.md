@@ -1,5 +1,20 @@
 # H3 Lite component sets
 
+## Preferred package download
+
+For a new installation, download one complete package from the maintained
+Baidu Netdisk shares before assembling files from multiple upstream sources.
+
+| Set | Default match | Share link | Code |
+| --- | --- | --- | --- |
+| A | About 8 GB VRAM, low-VRAM fast route | <https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow> | `4hri` |
+| B | 16 GB-class VRAM, FP8 compatibility route | <https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ> | `1hjx` |
+
+Each package contains its exclusive model files, the shared VAE and ClipProj
+files, the matching custom nodes, workflows, and a component manifest. Do not
+mix the two packages. If a user cannot use Baidu Netdisk, fall back to the
+upstream sources below while preserving the exact filenames, sizes, and hashes.
+
 Treat each row as a versioned set. Do not freely mix a diffusion checkpoint,
 text encoder, Turbo LoRA, node revision, and workflow merely because each file
 loads independently. A set is validated only after it produces coherent moving

@@ -15,6 +15,17 @@
 </p>
 
 <a id="zh-cn"></a>
+### 组件下载（优先入口）
+
+安装时请根据显存只选择一套组件，不要把 A、B 两套混在一起。百度网盘包已经整理好对应模型、节点、工作流和清单，优先从这里下载：
+
+| 方案 | 适合配置 | 分享链接 | 提取码 |
+|---|---|---|---|
+| Set A | 约 8 GB 显存，低显存快速路线 | [百度网盘](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
+| Set B | 16 GB 级显存，FP8 兼容路线 | [百度网盘](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
+
+下载后，将包内的 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，把 `workflows` 中的 JSON 导入 ComfyUI，并保留 `component-manifest.json`。两个包都包含各自所需的共享 ClipProj 和 VAE，用户只需要下载一个方案。百度网盘不可用时，再改用组件清单中的上游来源。
+
 ## 中文
 
 `H3 Lite` 是一个给 Codex/WorkBuddy 等 Agent 使用的 MiniMax H3 本地视频生成 skill。你只需要用自然语言描述想看的画面，它会根据电脑配置选择 ComfyUI 路线，准备必要组件，生成短视频并验证结果。
@@ -146,6 +157,17 @@ Set B 曾出现“文件大小正确但内容损坏”的 W4A8 主模型，结�
 ## English
 
 `H3 Lite` is an Agent skill for Codex, WorkBuddy, and similar tools for local MiniMax H3 video generation. Describe the video you want in plain English, and it chooses a ComfyUI route from your hardware, prepares the required components, generates the clip, and verifies the result.
+
+### Preferred component download
+
+Choose one package by VRAM and download it from Baidu Netdisk before using upstream model pages:
+
+| Package | Default match | Link | Code |
+|---|---|---|---|
+| Set A | About 8 GB VRAM, low-VRAM fast route | [Baidu Netdisk](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
+| Set B | 16 GB-class VRAM, FP8 compatibility route | [Baidu Netdisk](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
+
+Download one complete package only. Merge its `models` and `custom_nodes` folders into `<ComfyUI>`, import the JSON files from `workflows`, and keep `component-manifest.json` for the component record. Both packages include the shared ClipProj and VAE files needed by that set. If Baidu Netdisk is unavailable or upstream download is explicitly requested, use the exact filenames, sizes, and hashes in [`references/component-sets.md`](references/component-sets.md).
 
 ### Choose a route
 
