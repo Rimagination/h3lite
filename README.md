@@ -52,6 +52,8 @@ https://github.com/Rimagination/h3lite
 请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
 ```
 
+▶️ [播放 / 下载生成视频](assets/examples/h3lite-red-ball-and-plant.mp4)
+
 **案例 2 · 金毛幼犬醒来（分段提示）**
 
 连续动作按时间分段，通常能让模型更好地遵循动作顺序：
@@ -63,6 +65,8 @@ https://github.com/Rimagination/h3lite
 
 [2s-5s] 幼犬慢慢醒来，前爪向前伸展，打了个带着细小吱声的哈欠，然后坐起身，用明亮好奇的眼睛环顾四周，尾巴开始摇晃。
 ```
+
+▶️ [播放 / 下载生成视频](assets/examples/h3lite-golden-retriever-puppy.mp4)
 
 不需要自己填写模型名称、节点名称、采样步数或 ComfyUI 工作流。`H3 Lite` 会根据电脑和要求决定这些细节。
 
@@ -83,6 +87,8 @@ https://github.com/Rimagination/h3lite
 ```text
 请使用 H3 Lite，生成一个 8 秒 16:9 视频：昏暗而宽阔的星舰舰桥内，一位短发女舰长背对镜头站在弧形观察窗前，窗外的深紫色星云中排列着庞大的黑色舰队。镜头先缓慢推近，舰队尾部的蓝色引擎逐渐增强；约 3.5 秒时切到舰长面部特写，舰队突然跃迁，强烈白光淹没舰桥，冲击使镜头剧烈震动，舰长踉跄后重新站稳。白光消退，窗外只剩空旷星云，她缓缓闭上眼睛。保留舰桥低沉嗡鸣、引擎蓄能声、跃迁爆响和金属震动声，配以逐渐增强的太空歌剧管弦乐。
 ```
+
+▶️ [播放 / 下载生成视频](assets/examples/h3lite-starship-jump.mp4)
 
 #### 图生视频
 
@@ -173,6 +179,8 @@ After installation, start with this simple prompt to quickly validate video and 
 Use H3 Lite to generate a 5-second landscape video. A small matte red rubber ball bounces twice on grey concrete, then rolls out of frame to the right. Use a locked-off low-angle camera, cold overcast daylight, shallow depth of field, and a 35mm cinematic look. Keep the sounds of the ball striking the ground twice and rolling across the concrete. No music.
 ```
 
+▶️ [Play / download the generated video](assets/examples/h3lite-red-ball-and-plant.mp4)
+
 **Example 2 · Golden retriever puppy wakes up (timeline prompt)**
 
 For consecutive actions, dividing the prompt by time usually helps the model follow the intended sequence more reliably:
@@ -184,6 +192,8 @@ Use H3 Lite to generate a 5-second landscape video:
 
 [2s-5s] The puppy slowly wakes up, stretches its front paws forward, yawns with a tiny squeak, then sits up and looks around with bright curious eyes as its tail starts wagging.
 ```
+
+▶️ [Play / download the generated video](assets/examples/h3lite-golden-retriever-puppy.mp4)
 
 ### Generate video with structured prompts
 
@@ -202,6 +212,8 @@ Use a simple three-part structure:
 ```text
 Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a starship, a short-haired female captain stands with her back to the camera before a curved observation window. A massive dark fleet waits against a deep-purple nebula. The camera slowly pushes in as the fleet's blue engines intensify. At about 3.5 seconds, cut to a close-up of the captain. The fleet suddenly jumps to hyperspace; a white flash floods the bridge, the camera shakes violently, and the captain staggers before bracing herself. As the light fades, only the empty nebula remains and she slowly closes her eyes. Keep the low bridge hum, rising engine whine, hyperspace boom, and metallic vibration, with a swelling space-opera orchestral score.
 ```
+
+▶️ [Play / download the generated video](assets/examples/h3lite-starship-jump.mp4)
 
 #### Image to video
 
