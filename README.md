@@ -179,3 +179,7 @@ Set B 曾出现过“文件大小正确、内容损坏”的 W4A8 主模型，�
 ## License
 
 H3 Lite 使用 MIT License。MiniMax 模型权重、ComfyUI、第三方 custom nodes 和上游资料分别遵循各自许可证。
+
+## 友情链接
+
+- [Linux.do](https://linux.do/)

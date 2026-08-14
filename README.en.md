@@ -177,3 +177,7 @@ A Set B W4A8 checkpoint once had the correct byte size but corrupted contents an
 ## License
 
 H3 Lite is released under the MIT License. MiniMax model weights, ComfyUI, third-party custom nodes, and upstream documentation remain subject to their respective licenses.
+
+## Community Support
+
+- [Linux.do](https://linux.do/)
