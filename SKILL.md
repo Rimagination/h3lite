@@ -36,6 +36,7 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Treat low-VRAM timing as an empirical estimate. The first run can be much slower because kernels compile and weights move between system RAM and VRAM.
 - Prefer `NORMAL_VRAM` when a validated 16 GB system can keep Set B resident. In a same-model/workflow/prompt/seed 640x352 comparison, an RTX 4060 Ti 16 GB run took 77.08 seconds versus 591.22 seconds on an RTX 4070 Laptop 8 GB using `LOW_VRAM`; treat dynamic loading/offload as the main operational explanation, not as a pure GPU benchmark or a promise.
 - When launching ComfyUI as a background process, redirect stdout and stderr to persistent files. A detached pipe can become invalid after the launching session is cleaned up, leaving ComfyUI alive but causing tqdm/logger writes to fail with `OSError: [Errno 22] Invalid argument`. On that signature, restart ComfyUI with persistent logs; do not redownload models or rerun a full doctor unless the restart exposes another error.
+- Keep media verification attached to the selected ComfyUI root. The verifier searches system `PATH`, `H3LITE_FFPROBE`, and common locations in or beside `<ComfyUI>` for `ffprobe`; both `h3_generate --watch` and standalone `h3_status` must receive or infer that root. Standalone status may infer the parent only when `--output-dir` points exactly `<ComfyUI>\output`; otherwise pass `--comfyui` explicitly. Treat `ffprobe_not_found` as a missing verifier, not evidence that generation failed, and do not requeue the video until the existing output has been inspected.
 - Treat run-history cleanup as explicit maintenance, never hot-path work. Use `scripts/h3_cleanup.py` in dry-run mode first and require `--apply` before deleting eligible run snapshots. Preserve `_environment`, `_hotpath`, `_workflows`, `_experiments`, prompt folders, timing data, and generated output files.
 
 ## Preferred component download source
@@ -429,6 +430,7 @@ process. Use `--queue-only` only when another process must own monitoring.
 python scripts/h3_status.py `
   --base-url http://127.0.0.1:8188 `
   --prompt-id <prompt-id> `
+  --comfyui <ComfyUI-path> `
   --output-dir <ComfyUI>\output `
   --run-root <ComfyUI>\user\h3lite_runs `
   --require-audio `
@@ -479,6 +481,11 @@ Do not report success from a queue ID alone. Confirm:
 - the plan's estimated range is compared with the actual ComfyUI execution time;
 - the configuration fingerprint and run manifest are recorded so a retry can be distinguished from an accidental duplicate;
 - the selected ComfyUI, models, custom_nodes, and output paths are recorded.
+
+If verification returns `ffprobe_not_found`, keep the generated file and repair
+only the verifier path. Set `H3LITE_FFPROBE` to an absolute `ffprobe.exe` when
+the executable lives outside the bounded ComfyUI locations; do not rerun the
+model merely because metadata inspection was unavailable.
 
 When diagnosing failures, use this order:
 

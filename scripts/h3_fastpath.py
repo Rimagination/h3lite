@@ -102,6 +102,7 @@ def build_status_command(
     scripts_dir: str | Path = SCRIPT_DIR,
     base_url: str = "http://127.0.0.1:8188",
     prompt_id: str,
+    comfyui: str | Path | None = None,
     output_dir: str | Path,
     run_root: str | Path,
     watch_interval: float = DEFAULT_WATCH_INTERVAL,
@@ -129,6 +130,8 @@ def build_status_command(
         "--compact",
         "--json",
     ]
+    if comfyui is not None:
+        command.extend(["--comfyui", str(comfyui)])
     if require_audio:
         command.append("--require-audio")
     if dynamic_check:

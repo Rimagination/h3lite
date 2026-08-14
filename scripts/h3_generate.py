@@ -12,6 +12,7 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -683,6 +684,7 @@ def create_run_manifest(
         "steps": args.steps,
         "fps": args.fps,
         "filename_prefix": args.filename_prefix,
+        "comfyui": str(normalize_windows_path(args.comfyui).resolve()) if getattr(args, "comfyui", None) else None,
         "output_dir": str(Path(args.output_dir).expanduser().resolve()) if args.output_dir else None,
         "effective_settings": effective_workflow_settings(workflow),
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -967,8 +969,35 @@ def resolve_output_paths(record: dict[str, Any], output_dir: Path | None) -> lis
     return paths
 
 
-def ffprobe(path: Path) -> dict[str, Any] | None:
+def _resolve_ffprobe(comfyui: Path | None = None) -> str | None:
     executable = shutil.which("ffprobe")
+    if executable:
+        return executable
+    configured = os.environ.get("H3LITE_FFPROBE")
+    if configured:
+        candidate = normalize_windows_path(configured)
+        if candidate.is_file():
+            return str(candidate)
+    if comfyui is None:
+        return None
+    roots = (
+        comfyui,
+        comfyui / "bin",
+        comfyui / "ffmpeg" / "bin",
+        comfyui / "tools" / "ffmpeg" / "bin",
+        comfyui.parent,
+        comfyui.parent / "ffmpeg" / "bin",
+    )
+    for root in roots:
+        for name in ("ffprobe.exe", "ffprobe"):
+            candidate = root / name
+            if candidate.is_file():
+                return str(candidate)
+    return None
+
+
+def ffprobe(path: Path, comfyui: Path | None = None) -> dict[str, Any] | None:
+    executable = _resolve_ffprobe(comfyui)
     if not executable or not path.exists():
         return None
     command = [
@@ -1020,6 +1049,7 @@ def verify_outputs(
     expected_frames: int | None = None,
     expected_fps: float | None = None,
     require_audio: bool = False,
+    comfyui: Path | None = None,
 ) -> list[dict[str, Any]]:
     verified: list[dict[str, Any]] = []
     for path in paths:
@@ -1036,9 +1066,14 @@ def verify_outputs(
                 item["size_bytes"] = path.stat().st_size
             except OSError:
                 item["size_bytes"] = None
-            item["ffprobe"] = ffprobe(path)
+            item["ffprobe"] = ffprobe(path, comfyui)
             probe = item.get("ffprobe")
+            if probe is None:
+                item["verification_error"] = "ffprobe_not_found" if _resolve_ffprobe(comfyui) is None else "ffprobe_failed"
             if isinstance(probe, dict):
+                if probe.get("error"):
+                    item["verification_error"] = "ffprobe_failed"
+                    item["verification_detail"] = str(probe["error"])
                 streams = probe.get("streams", [])
                 if isinstance(streams, list):
                     video_streams = [stream for stream in streams if isinstance(stream, dict) and stream.get("codec_type") == "video"]
@@ -1300,6 +1335,7 @@ def main() -> int:
                 prompt_id=prompt_id,
                 base_url=args.base_url,
                 output_dir=str(output_dir) if output_dir else None,
+                comfyui=str(comfyui_path) if comfyui_path else None,
                 run_manifest=str(manifest_path) if manifest_path else None,
                 run_root=str(run_root) if run_root else None,
                 expected_duration=None,
@@ -1366,6 +1402,7 @@ def main() -> int:
             expected_frames=settings.get("length"),
             expected_fps=settings.get("fps"),
             require_audio=resolved_audio_policy == "require",
+            comfyui=comfyui_path,
         )
         verification_ok = bool(verified) and all(item.get("verified") is True for item in verified)
         result = {
