@@ -218,6 +218,7 @@ def compact_result(result: dict[str, object]) -> dict[str, object]:
                         "fps_ok",
                         "audio_ok",
                         "verified",
+                        "verification_error",
                         "dynamic_qa",
                     )
                     if key in item
@@ -232,6 +233,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-id", required=True, help="ComfyUI prompt_id returned by h3_generate.py --queue-only")
     parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
     parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
+    parser.add_argument("--comfyui", help="ComfyUI root used to locate a bundled ffprobe")
     parser.add_argument("--run-manifest", help="specific h3lite run manifest to update and use for expected settings")
     parser.add_argument("--run-root", help="run-manifest root used to locate a manifest by prompt id")
     parser.add_argument("--expected-duration", type=float, help="expected video duration in seconds")
@@ -260,6 +262,10 @@ def status_once(args: argparse.Namespace) -> dict[str, object]:
             manifest = {}
     if output_dir is None and manifest.get("output_dir"):
         output_dir = Path(str(manifest["output_dir"])).expanduser().resolve()
+    comfyui_value = getattr(args, "comfyui", None) or manifest.get("comfyui")
+    comfyui = Path(str(comfyui_value)).expanduser().resolve() if comfyui_value else None
+    if comfyui is None and output_dir is not None and output_dir.name.lower() == "output":
+        comfyui = output_dir.parent
     settings = manifest.get("effective_settings") if isinstance(manifest.get("effective_settings"), dict) else {}
     expected_duration = args.expected_duration if args.expected_duration is not None else settings.get("expected_duration_seconds")
     expected_frames = args.expected_frames if args.expected_frames is not None else settings.get("length")
@@ -284,6 +290,7 @@ def status_once(args: argparse.Namespace) -> dict[str, object]:
                 expected_frames=int(expected_frames) if expected_frames is not None else None,
                 expected_fps=float(expected_fps) if expected_fps is not None else None,
                 require_audio=require_audio,
+                comfyui=comfyui,
             )
             if args.dynamic_check:
                 for item in outputs:

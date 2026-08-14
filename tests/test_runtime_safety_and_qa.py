@@ -1,4 +1,5 @@
 import copy
+from argparse import Namespace
 import hashlib
 import json
 import sys
@@ -331,6 +332,92 @@ class SubmissionContractTests(unittest.TestCase):
             self.assertEqual(len(result), 1)
             self.assertTrue(result[0]["verified"])
 
+    def test_ffprobe_falls_back_to_comfyui_directory(self):
+        from h3_generate import _resolve_ffprobe
+
+        with tempfile.TemporaryDirectory() as directory:
+            comfyui = Path(directory)
+            bundled = comfyui / "ffprobe.exe"
+            bundled.write_bytes(b"placeholder")
+            with patch("h3_generate.shutil.which", return_value=None):
+                resolved = _resolve_ffprobe(comfyui)
+
+        self.assertEqual(resolved, str(bundled))
+
+    def test_media_verification_reports_missing_ffprobe(self):
+        from h3_generate import verify_outputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "clip.mp4"
+            path.write_bytes(b"placeholder")
+            with patch("h3_generate._resolve_ffprobe", return_value=None), patch("h3_generate.ffprobe", return_value=None):
+                result = verify_outputs([path], comfyui=Path(directory))
+
+        self.assertFalse(result[0]["verified"])
+        self.assertEqual(result[0]["verification_error"], "ffprobe_not_found")
+
+    def test_media_verification_passes_comfyui_to_ffprobe(self):
+        from h3_generate import verify_outputs
+
+        with tempfile.TemporaryDirectory() as directory:
+            comfyui = Path(directory)
+            path = comfyui / "output" / "clip.mp4"
+            path.parent.mkdir()
+            path.write_bytes(b"placeholder")
+            with patch("h3_generate.ffprobe", return_value={"streams": [], "format": {}}) as probe:
+                verify_outputs([path], comfyui=comfyui)
+
+        probe.assert_called_once_with(path, comfyui)
+
+    def test_compact_status_keeps_verifier_error(self):
+        from h3_status import compact_result
+
+        result = compact_result(
+            {
+                "ok": False,
+                "state": "verification_failed",
+                "outputs": [{"path": "clip.mp4", "verified": False, "verification_error": "ffprobe_not_found"}],
+            }
+        )
+
+        self.assertEqual(result["outputs"][0]["verification_error"], "ffprobe_not_found")
+
+    def test_standalone_status_infers_comfyui_from_output_directory(self):
+        from h3_status import status_once
+
+        with tempfile.TemporaryDirectory() as directory:
+            comfyui = Path(directory) / "ComfyUI"
+            output_dir = comfyui / "output"
+            output_dir.mkdir(parents=True)
+            args = Namespace(
+                prompt_id="prompt-123",
+                base_url="http://127.0.0.1:8188",
+                output_dir=str(output_dir),
+                comfyui=None,
+                run_manifest=None,
+                run_root=str(comfyui / "user" / "h3lite_runs"),
+                expected_duration=None,
+                expected_frames=None,
+                expected_fps=None,
+                require_audio=False,
+                dynamic_check=False,
+            )
+            record = {"status": {"completed": True}}
+            outputs = [{"path": str(output_dir / "clip.mp4"), "verified": True}]
+            with (
+                patch("h3_status.json_request", return_value={args.prompt_id: record}),
+                patch("h3_status.history_record", return_value=record),
+                patch("h3_status.execution_error", return_value=None),
+                patch("h3_status.execution_elapsed_seconds", return_value=1.0),
+                patch("h3_status.resolve_output_paths", return_value=[output_dir / "clip.mp4"]),
+                patch("h3_status.verify_outputs", return_value=outputs) as verify,
+                patch("h3_status.record_timing_sample"),
+            ):
+                result = status_once(args)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(verify.call_args.kwargs["comfyui"], comfyui.resolve())
+
     def test_empirical_timing_is_recorded_and_reused_by_planner(self):
         from h3_plan import build_plan, record_timing_sample
 
@@ -520,6 +607,7 @@ class FastPathContractTests(unittest.TestCase):
             scripts_dir=SCRIPTS,
             base_url="http://127.0.0.1:8188",
             prompt_id="prompt-123",
+            comfyui=Path("F:/MiniMax-H3/ComfyUI"),
             output_dir=Path("F:/MiniMax-H3/ComfyUI/output"),
             run_root=Path("F:/MiniMax-H3/ComfyUI/user/h3lite_runs"),
         )
@@ -528,6 +616,8 @@ class FastPathContractTests(unittest.TestCase):
         self.assertIn("20", command)
         self.assertIn("--watch-timeout", command)
         self.assertIn("3600", command)
+        self.assertIn("--comfyui", command)
+        self.assertIn("F:\\MiniMax-H3\\ComfyUI", command)
         self.assertNotIn("--verbose", command)
 
     def test_skill_documents_the_single_entry_hot_path(self):
@@ -535,6 +625,13 @@ class FastPathContractTests(unittest.TestCase):
 
         self.assertIn("h3_fastpath.py", skill)
         self.assertIn("Do not issue repeated one-shot status calls", skill)
+
+    def test_skill_documents_bundled_ffprobe_recovery(self):
+        skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("ffprobe_not_found", skill)
+        self.assertIn("H3LITE_FFPROBE", skill)
+        self.assertIn("exactly `<ComfyUI>\\output`", skill)
 
 
 class CleanupSafetyTests(unittest.TestCase):
