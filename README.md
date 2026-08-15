@@ -42,7 +42,6 @@ https://github.com/Rimagination/h3lite
 6 GB 显存属于社区实验路线，建议配 32 GB 系统内存；低于 6 GB 显存或低于 16 GB 系统内存时，不建议下载和部署这套工作流。
 
 AMD/ROCm、RTX 50 系列新架构和原生 BF16 H3 不在当前默认验证范围内，Agent 会先做兼容性判断，不会仅凭显存容量承诺“能跑”。详细硬件、组件和分辨率说明见 [`references/deployment-matrix.md`](references/deployment-matrix.md)。
-
 默认从 `fast` 路线开始。质量档位、I2V/Ref2VA、人脸质量和时间预估由 Agent 根据实际环境自动选择；这些判断不会给视频推理图增加额外采样或模型。
 
 ## 快速验证：红球弹跳
