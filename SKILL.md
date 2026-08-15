@@ -242,10 +242,14 @@ python scripts/h3_doctor.py `
 Record GPU name and VRAM, system RAM, free disk, Python, CUDA/PyTorch visibility, ComfyUI location, model presence, and custom-node presence. If there is no NVIDIA CUDA device, do not promise this local CUDA route; explain the limitation and offer API/cloud or another backend as an alternative.
 
 The doctor also records available physical RAM, available Windows pagefile, and
-GPU compute processes. Low available RAM or VRAM is a warning because the
-validated 8 GB route can still finish with offload. A nearly exhausted
-pagefile is different: it previously caused `hostbuf_file_reader_read failed`
-and system-level paging failures, so `h3_preflight.py` blocks that run.
+GPU compute processes. The lowest configuration validated by this project is an
+RTX 3060 Ti with 8 GB VRAM and 16 GB system RAM on the W4A8 route. Treat that
+as a conservative fast/smoke-test floor, not a promise for every 8 GB card;
+32 GB RAM remains the recommended target. Low available RAM or VRAM is a
+warning because the validated 8 GB route can finish with offload. A nearly
+exhausted pagefile is different: it previously caused
+`hostbuf_file_reader_read failed` and system-level paging failures, so
+`h3_preflight.py` blocks that run.
 
 Use `references/deployment-matrix.md` to choose a profile. For an 8 GB laptop, start with the tested W4A8 profile, not the larger official INT8/32B profile.
 
@@ -255,11 +259,11 @@ ComfyUI, nodes, Python packages, or model weights.
 
 ### 2. Select a profile
 
-- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, 640x352, 124 frames, and 4 steps. The launch profile uses `--lowvram` for the very-low/8 GB tiers; 10–16 GB systems use normal VRAM mode unless preflight or a prior OOM justifies offload. Use Block Cache only when its classes are actually loaded; otherwise use the compatibility workflow. This is the success-rate baseline.
+- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, 640x352, 124 frames, and 4 steps. The launch profile uses `--lowvram` for the very-low/8 GB tiers; the 8 GB + 16 GB RAM floor is validated on RTX 3060 Ti and should stay on this conservative baseline. 10–16 GB systems use normal VRAM mode unless preflight or a prior OOM justifies offload. Use Block Cache only when its classes are actually loaded; otherwise use the compatibility workflow. This is the success-rate baseline.
 - **Balanced:** keep the low-VRAM canvas on an 8 GB laptop, use 6 steps, and bypass Block Cache. On a mid/high-VRAM machine, the planner may select 864x480.
 - **Quality:** use 8 steps and bypass Block Cache. On an 8 GB laptop, keep 640x352 and warn that W4A8/4B remains a quality ceiling; on a mid/high-VRAM machine, the planner may select 864x480.
 - **6 GB experimental:** when the machine has roughly 6 GB VRAM, 32 GB system RAM, an SSD, and sufficient pagefile headroom, permit a cautious first run at 608x352, 4 steps, and low-VRAM offload. Treat community timings as orientation only: reported I2V runs include about 345 seconds at 608x352/4 seconds and 441 seconds at 864x480/5 seconds, while another 640x480/5-second report took about 13.7 minutes. These used different official/community model and workflow combinations, so do not transfer the numbers to the bundled W4A8 graph as a promise.
-- **Below roughly 6 GB or insufficient RAM/disk:** stop before downloading or queueing. Explain the missing capacity and propose a hosted/API or alternative model.
+- **Below roughly 6 GB or below 16 GB system RAM:** stop before downloading or queueing. Explain the missing capacity and propose a hosted/API or alternative model. For an unvalidated 8 GB GPU paired with only 16 GB RAM, keep the warning and require a conservative smoke test rather than generalizing from the RTX 3060 Ti result.
 
 Do not infer that a smaller file or INT8 label is automatically faster. On low-VRAM systems, CPU offload, RAM bandwidth, kernel compatibility, and first-run compilation often dominate.
 

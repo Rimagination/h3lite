@@ -75,13 +75,18 @@ blindly copying an old command.
 | Profile | Typical hardware | Model and graph | Starting output | Use when |
 | --- | --- | --- | --- | --- |
 | `experimental-6gb` | About 6 GB VRAM, preferably 32 GB system RAM, SSD and healthy pagefile | Begin with the official H3-compatible INT8/NVFP4 route when its exact files are available, or another explicitly validated 6 GB graph; use aggressive offload | 608x352, about 4-5 seconds, 4 steps | Community reports show successful 3060 6 GB laptop runs, but this is not the bundled W4A8 graph's validated floor. Expect high variance and long CPU/RAM offload. |
-| `low-vram-w4a8` | 8 GB VRAM, 32 GB system RAM, SSD | One registered W4A8 + Qwen3-VL 4B + Turbo LoRA component set; 4B ClipProj; dual VAEs; `--lowvram`/offload flags | 640x352 fast default; 608x352 smoke test; 864x480 only after validation | Use `component-sets.md`; do not mix files across sets. |
+| `low-vram-w4a8` | 8 GB VRAM; **16 GB system RAM is validated on RTX 3060 Ti**, 32 GB recommended; SSD | One registered W4A8 + Qwen3-VL 4B + Turbo LoRA component set; 4B ClipProj; dual VAEs; `--lowvram`/offload flags | 640x352 fast default; 608x352 smoke test; 864x480 only after validation | Use `component-sets.md`; do not mix files across sets. The 16 GB floor is hardware-specific evidence, not a blanket claim for every 8 GB GPU. |
 | `w4a8-mid` | 10-<16 GB VRAM, 32 GB+ RAM | Same W4A8 family, normally without `--lowvram`; keep the same audio and flow/sigma-shift path | 864x480; 124 frames; 4-8 steps | A reproducible baseline is more important than using the largest checkpoint. |
 | `w4a8-high` | 16 GB+ VRAM with 32 GB-class system RAM | Keep a registered W4A8 set as the first reproducible route; normal VRAM launch by default | 864x480 after the fast baseline | VRAM alone does not prove that the native 32B route fits system RAM or its kernels. |
 | `native-int8` | More VRAM/RAM and a compatible current ComfyUI build | Official native H3 INT8 diffusion/text encoder/VAE set; optional Turbo LoRA and Sage Attention | Official H3 canvas, then a short comparison | Opt in only after the official workflow and runtime kernel set pass a smoke test. |
-| `blocked-or-alternative` | Less than about 6 GB VRAM, a 6 GB GPU with clearly insufficient system RAM/pagefile, less than 24 GB RAM generally, or insufficient SSD headroom | Do not download a large H3 model yet | N/A | Use a hosted/API backend, a smaller video model, or upgrade storage/RAM. |
+| `blocked-or-alternative` | Less than about 6 GB VRAM, a 6 GB GPU with clearly insufficient system RAM/pagefile, less than 16 GB RAM generally, or insufficient SSD headroom | Do not download a large H3 model yet | N/A | Use a hosted/API backend, a smaller video model, or upgrade storage/RAM. |
 
 The thresholds are operational heuristics. VRAM is not the only constraint: system RAM, disk speed, CUDA kernel support, and model offload behavior can dominate the elapsed time.
+
+The project's current lower-bound evidence is an RTX 3060 Ti with 8 GB VRAM
+and 16 GB system RAM completing the W4A8 route. No timing sample is attached to
+that validation, so the planner must keep it on the 640x352/4-step fast baseline
+and report a caution. Do not generalize this result to an arbitrary 8 GB GPU.
 
 ### Controlled Set B timing evidence
 

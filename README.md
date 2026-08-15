@@ -37,7 +37,9 @@ https://github.com/Rimagination/h3lite
 
 ## 基本配置
 
-当前默认支持 **Windows + NVIDIA CUDA** 的本地低显存路线。8 GB 显存也可以尝试，但建议配 32 GB 系统内存和 SSD；12–16 GB 会更宽裕。
+当前默认支持 **Windows + NVIDIA CUDA** 的本地低显存路线。已实测验证的下限是 **RTX 3060 Ti 8 GB 显存 + 16 GB 系统内存**；这只代表当前 W4A8 快速路线可以运行，不代表所有 8 GB 显卡都能得到相同结果。仍建议配 32 GB 系统内存和 SSD；12–16 GB 显存会更宽裕。
+
+6 GB 显存属于社区实验路线，建议配 32 GB 系统内存；低于 6 GB 显存或低于 16 GB 系统内存时，不建议下载和部署这套工作流。
 
 AMD/ROCm、RTX 50 系列新架构和原生 BF16 H3 不在当前默认验证范围内，Agent 会先做兼容性判断，不会仅凭显存容量承诺“能跑”。详细硬件、组件和分辨率说明见 [`references/deployment-matrix.md`](references/deployment-matrix.md)。
 

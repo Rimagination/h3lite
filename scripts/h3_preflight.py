@@ -125,10 +125,12 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
         "ram_available_gb": available_ram,
         "page_file_available_gb": available_pagefile,
     })
-    if total_ram is not None and total_ram < 24:
-        errors.append(f"system RAM is only {total_ram:.1f} GB; the tested route expects at least 24 GB")
+    if total_ram is not None and total_ram < 16:
+        errors.append(f"system RAM is only {total_ram:.1f} GB; the tested route expects at least 16 GB")
     elif total_vram is not None and total_vram < 7.5 and total_ram is not None and total_ram < 31:
         errors.append(f"6 GB-class VRAM needs about 32 GB system RAM for the community-tested offload route; only {total_ram:.1f} GB was reported")
+    elif total_vram is not None and 7.5 <= total_vram < 10 and total_ram is not None and total_ram < 24:
+        warnings.append("8 GB W4A8 with 16 GB system RAM is validated on RTX 3060 Ti; use the 640x352/4-step fast baseline and do not generalize this result to other GPUs")
     if available_ram is not None and available_ram < 2:
         errors.append(f"currently available RAM is only {available_ram:.2f} GB")
     elif available_ram is not None and available_ram < 6:

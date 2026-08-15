@@ -89,6 +89,33 @@ class RuntimeSafetyTests(unittest.TestCase):
 
         self.assertEqual(result["name"], "w4a8-high")
 
+    def test_rtx_3060_ti_8gb_with_16gb_ram_is_validated_low_vram_floor(self):
+        from h3_doctor import choose_profile
+
+        result = choose_profile(
+            [{"name": "RTX 3060 Ti", "vram_total_gb": 8.0}],
+            {"total_gb": 16.0},
+            {"free_gb": 100.0},
+        )
+
+        self.assertEqual(result["name"], "low-vram-w4a8")
+        self.assertEqual(result["confidence"], "medium")
+
+    def test_8gb_with_16gb_ram_is_caution_not_blocked(self):
+        from h3_preflight import assess_runtime_risk
+
+        report = {
+            "gpus": [{"name": "RTX 3060 Ti", "vram_total_gb": 8.0, "vram_free_gb": 2.0}],
+            "system_memory": {"total_gb": 16.0, "available_gb": 8.0, "page_file_available_gb": 16.0},
+            "disk": {"free_gb": 100.0},
+            "recommendation": {"name": "low-vram-w4a8"},
+        }
+
+        result = assess_runtime_risk(report)
+
+        self.assertEqual(result["status"], "caution")
+        self.assertTrue(any("16 GB system RAM" in item for item in result["warnings"]))
+
     def test_6gb_with_32gb_ram_is_caution_not_blocked(self):
         from h3_preflight import assess_runtime_risk
 
