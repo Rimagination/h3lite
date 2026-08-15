@@ -192,6 +192,41 @@ def empirical_estimate(
     return lower_int, upper_int, len(values)
 
 
+def empirical_variant_estimate(
+    timing: dict[str, Any] | None,
+    base_key: str,
+    fallback_lower: int,
+    fallback_upper: int,
+) -> tuple[int, int, int, str] | None:
+    """Use one unambiguous variant history when the planner lacks graph details.
+
+    Fastpath plans before the final workflow has been materialized, so the
+    planner may know the route/resolution but not the exact LoRA/cache variant.
+    Reuse a single matching variant only; refusing an ambiguous mixture keeps
+    experimental timings from silently calibrating the default route.
+    """
+    entries = timing.get("entries") if isinstance(timing, dict) else None
+    if not isinstance(entries, dict):
+        return None
+    prefix = f"{base_key}|"
+    matches: list[tuple[str, dict[str, Any]]] = []
+    for key, entry in entries.items():
+        if isinstance(key, str) and key.startswith(prefix) and isinstance(entry, dict):
+            matches.append((key, entry))
+    if len(matches) != 1:
+        return None
+    variant_key, entry = matches[0]
+    calibrated = empirical_estimate(
+        {"entries": {"variant": entry}},
+        "variant",
+        fallback_lower,
+        fallback_upper,
+    )
+    if not calibrated:
+        return None
+    return (*calibrated, variant_key)
+
+
 def max_vram_gb(report: dict[str, Any]) -> float:
     values = [
         _as_float(gpu.get("vram_total_gb"))
@@ -469,6 +504,10 @@ def build_plan(
         calibrated = empirical_estimate(timing, candidate_key, fallback_lower, fallback_upper)
         if calibrated:
             return (*calibrated, "empirical", candidate_key)
+        variant_calibrated = empirical_variant_estimate(timing, candidate_key, fallback_lower, fallback_upper)
+        if variant_calibrated:
+            lower, upper, sample_count, variant_key = variant_calibrated
+            return lower, upper, sample_count, "empirical-variant", variant_key
         return fallback_lower, fallback_upper, 0, "heuristic-range", candidate_key
 
     candidates = ["fast", "balanced", "quality"]
@@ -488,6 +527,8 @@ def build_plan(
 
     decision, warnings = _make_decision(selected_mode, report, aspect, resolution)
     lower, upper, sample_count, estimate_source, key = estimate_for(selected_mode, decision)
+    if estimate_source == "empirical-variant":
+        warnings.append("时间预估复用了唯一匹配的工作流变体记录；若更换 LoRA、缓存或组件集，应重新建立该变体样本。")
     budget_fit = target_minutes is None or upper <= target_minutes * 60
     if target_minutes is not None and not budget_fit:
         warnings.append(f"当前选档的预计上限约 {upper / 60:.1f} 分钟，超过 {target_minutes:.1f} 分钟预算。")
@@ -541,7 +582,7 @@ def build_plan(
             "upper_seconds": upper,
             "lower_minutes": round(lower / 60, 1),
             "upper_minutes": round(upper / 60, 1),
-            "confidence": "empirical" if estimate_source == "empirical" else "heuristic-range",
+            "confidence": "empirical" if estimate_source.startswith("empirical") else "heuristic-range",
             "source": estimate_source,
             "sample_count": sample_count,
             "timing_key": key,

@@ -24,6 +24,7 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Prefer the ComfyUI HTTP API with an API-format workflow JSON. Use browser/CDP capture only as a recovery path when no reusable workflow JSON exists.
 - Check `http://127.0.0.1:8188/system_stats` before starting anything. If ComfyUI is already healthy, reuse it and do not restart it or rediscover its workflow history.
 - Preserve MiniMax H3's audio path and flow/sigma-shift handling when the user wants native audio. Do not remove audio VAE, audio conditioning, or the H3 sampling node merely to make a graph look simpler.
+- **Face-quality routing:** if the user needs a recognizable or speaking human face, do not treat low-VRAM W4A8 T2VA at 640x352 as a final-quality route. Prefer I2VA with a clear first-frame reference; prefer Ref2VA when identity must persist across shots. Read `references/face-quality.md` before selecting that route. These checks may change prompt routing or post-generation inspection, but must not add sampling steps, extra generation models, or a second inference pass.
 - On current ComfyUI builds, the API class `MiniMaxH3SigmaShift` is the native `ModelSamplingMiniMaxH3` node and uses the merged `ModelSamplingAV` video/audio schedule fix. Detect it by `/object_info` or the local source before adding a custom dual-clock sampler; do not duplicate the fix merely because the API class keeps its compatibility name.
 - Run the read-only planner before a non-trivial generation. It must report selected mode, resolution, steps, cache policy, paths, and an estimated time range. Do not present an estimate as a guarantee.
 - Run the read-only preflight after the doctor and planner. Treat low available RAM/VRAM as a caution, but stop when the pagefile is critically low, required assets are missing, or the doctor recommends an alternative backend.
@@ -348,13 +349,48 @@ Identify the generation mode before writing:
 - last-frame image → `L2VA`
 - reusable images/video/audio references → `Ref2VA`
 
-Read `references/prompt-writing.md` when composing or revising a prompt. Use the exact field names and ordering required by that mode. For native base modes, the core order is:
+Read `references/prompt-writing.md` when composing or revising a prompt. For
+complex multimodal requests, also read `references/official-h3-insights.md`.
+Use the exact field names and ordering required by that mode. For native base
+modes, the core order is:
 
 ```text
 integrated_multimodal_description: ...
 overall_soundscape: ...
 non_diegetic_music: ...
 ```
+
+When the user asks for a cinematic, film-like, short-film, trailer, or
+电影感 result, also read `references/cinematic-prompting.md` and activate
+cinematic mode. Do not treat “cinematic” as a list of filters. First decide
+the scene's irreducible conflict, the audience's physical position, the
+relationship pressure shaping the composition, the gaze flow through the
+frame, a color thesis grounded in practical sources, and a plausible capture
+base. Then translate those decisions into the same H3 fields above.
+
+For cinematic mode:
+
+- Prefer one motivated continuous shot for a 5-second action; add a cut only
+  when it reveals new information. Use no more than two shots in a short clip
+  unless the user explicitly asks for a montage.
+- Describe camera motion with type, amplitude, and speed, such as a small,
+  slow push-in or a large, fast pan. Do not stack contradictory camera moves.
+- State camera height, distance, focal-length range, subject scale, focus
+  plane, and the reason for any foreground obstruction when those choices
+  control the film grammar.
+- Make the main action observable and causal. Replace “poetic”, “epic”,
+  “beautiful”, or “cinematic” adjective piles with who moves, what changes,
+  and what remains unresolved at the end.
+- Ground color in clothing, walls, weather, practical lights, materials, or
+  reflections. Do not default to teal-orange grading, blue-gray darkness,
+  heavy fog, particles, rim light, glossy skin, or game-key-art lighting.
+- Keep `overall_soundscape` and `non_diegetic_music` explicit. Preserve native
+  H3 audio unless the user requests complete silence; “no dialogue” still
+  permits ambience and action sounds.
+- Run the cinematic anti-template check before submission: the shot must not
+  read as an advertisement, game concept art, generic AI wallpaper, or TV
+  drama blocking, and the gaze flow must be explainable by this subject and
+  event rather than a reusable template.
 
 For user-facing 5-second quick-start examples, teach the same idea as a memorable three-part structure: **scene and atmosphere → action and camera → sound**. Present it as one natural-language prompt that can be copied directly; do not require users to write schema labels. Treat this as an explanation aid, then translate it internally into the workflow's required prompt schema.
 
@@ -373,6 +409,39 @@ Make the prompt operational:
 - Interpret `不要对白` / `无对白` / `no dialogue` as a dialogue-only constraint: keep native ambience, sound effects, animal or action sounds, and the audio stream. Disable all audio only when the user explicitly requests `完全静音`, `无任何声音`, or `no audio`.
 - use stable speaker IDs and exact text for dialogue;
 - use `N/A` for music only when no non-diegetic music is desired, and use `overall_soundscape: N/A` only for explicitly complete silence.
+
+For complex prompts, emulate the official context-building discipline even
+when the local route does not include H3-Context-IR: resolve reference roles,
+subject identity, temporal anchors, retention requirements, audio roles, and
+task type before writing the timeline. For `Ref2VA`, keep `<Subject N>`,
+`<Picture N>`, `<Video N>`, and `<Audio N>` labels stable across every section;
+do not treat the presence of a video or audio file as automatic video editing
+or audio reuse.
+
+The official system supports 4–15 second output, 24 FPS, 32 kHz stereo audio,
+and up to 2K through the separate H3-Regenerate-2K stage. These are official
+system facts, not promises for the local W4A8 route: keep the validated
+5-second/640x352 baseline unless the planner and installed workflow approve a
+larger duration or canvas, and describe 2K as an official multi-stage/API path
+unless a local equivalent is actually installed.
+
+Do not claim that H3 cannot generate realistic human dialogue, singing, or
+live-action people without a failed, reproducible run. H3 is an audiovisual
+model and the official guide explicitly includes speakers, dialogue, singing,
+and diegetic audio. A local W4A8/ClipProj test has also produced a realistic
+live-action two-person dialogue clip with clearly audible speech; treat this as
+an empirical capability, not a guarantee for every prompt, checkpoint, step
+count, or hardware profile.
+
+For dialogue requests, prefer a short 5-second capability test before
+proposing a TTS pipeline: use natural-language dialogue with exact quoted
+lines on the bundled simplified route, describe each speaker's identity and
+turn-taking, and verify the resulting audio. Use the official `<d>`, `(S1)` and
+`<scenetrans>` notation only when the selected graph accepts the official
+schema; do not force those tags into a ClipProj prompt that expects natural
+language. Verify visual realism and speech separately: frame inspection shows
+the person, an audio stream check shows audio exists, and listening or speech
+analysis is required to establish that the words are intelligible.
 
 If the selected ComfyUI graph uses a ClipProj/krea2 or another custom prompt schema, inspect its example workflow first. Adapt the official semantic structure to the node's accepted field while preserving the graph's required fields; do not blindly paste a T2VA prompt into a Ref2VA input or vice versa.
 
@@ -504,6 +573,9 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `references/deployment-matrix.md`: tested low-VRAM profile, official fallback profile, model folders, node roles, launch flags, and failure triage.
 - `references/component-sets.md`: registered model/workflow sets, exact known byte sizes, runtime ABI record, and download-integrity rules.
 - `references/prompt-writing.md`: concise operational digest of MiniMax's official H3 prompt guide and prompt-writing skill.
+- `references/face-quality.md`: face-first routing, I2VA identity limits, Ref2VA requirements, and the zero-inference-cost quality policy.
+- `references/cinematic-prompting.md`: film-grammar extension for cinematic H3 prompts, including relationship pressure, gaze flow, practical color, camera grammar, and anti-template checks.
+- `references/official-h3-insights.md`: distilled official guidance on Context-IR thinking, reference roles, retention, audio/dialogue, timing, and local-route boundaries.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
 - `assets/h3_w4a8_i2v_api.json`: reusable low-VRAM I2VA graph with native first-frame input and optional acceleration patches.
@@ -523,3 +595,5 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - Official H3 prompt-writing skill: <https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing>
 - Official ComfyUI H3 tutorial: <https://docs.comfy.org/tutorials/video/minimax/minimax-h3>
 - H3 Turbo ComfyUI nodes: <https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo>
+- Cinema DNA 21:9 × 3: <https://github.com/dacnay816y62-hub/cinema-dna-21x9x3>
+- Official H3 repository and prompting guidance: <https://github.com/MiniMax-AI/MiniMax-H3>

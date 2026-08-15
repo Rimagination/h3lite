@@ -15,6 +15,36 @@ sys.path.insert(0, str(SCRIPTS))
 
 
 class RuntimeSafetyTests(unittest.TestCase):
+    def test_blackwell_torch_architecture_mismatch_is_a_warning(self):
+        from h3_doctor import runtime_compatibility
+
+        result = runtime_compatibility({
+            "python_probes": [{
+                "path": "comfy-python",
+                "torch": "2.6.0",
+                "torch_arch_list": ["sm_90"],
+                "torch_devices": [{"name": "RTX 5070", "capability": [12, 0]}],
+            }]
+        })
+
+        self.assertEqual(result["status"], "caution")
+        self.assertTrue(any("sm_120" in item for item in result["warnings"]))
+
+    def test_blackwell_torch_architecture_mismatch_is_a_warning(self):
+        from h3_doctor import runtime_compatibility
+
+        result = runtime_compatibility({
+            "python_probes": [{
+                "path": "comfy-python",
+                "torch": "2.6.0",
+                "torch_arch_list": ["sm_90"],
+                "torch_devices": [{"name": "RTX 5070", "capability": [12, 0]}],
+            }]
+        })
+
+        self.assertEqual(result["status"], "caution")
+        self.assertTrue(any("sm_120" in item for item in result["warnings"]))
+
     def test_fp8_4b_encoder_is_a_valid_low_vram_role(self):
         from h3_doctor import model_report
 

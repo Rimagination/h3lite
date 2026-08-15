@@ -187,6 +187,7 @@ def python_probe(path: Path) -> dict[str, Any]:
     code = (
         "import json,sys; r={'python':sys.version.split()[0]}; "
         "\ntry:\n import torch\n r.update({'torch':torch.__version__,'cuda_available':bool(torch.cuda.is_available()),'torch_cuda':torch.version.cuda})\n "
+        "\n if torch.cuda.is_available():\n  r['torch_arch_list']=list(torch.cuda.get_arch_list()) if hasattr(torch.cuda,'get_arch_list') else []\n  r['torch_devices']=[]\n  for i in range(torch.cuda.device_count()):\n   r['torch_devices'].append({'name':torch.cuda.get_device_name(i),'capability':list(torch.cuda.get_device_capability(i))})\n "
         "\nexcept Exception as e: r.update({'torch_error':type(e).__name__+': '+str(e)})\n"
         "\ntry:\n import comfy_kitchen\n r.update({'comfy_kitchen':getattr(comfy_kitchen,'__version__','unknown'),'comfy_kitchen_path':getattr(comfy_kitchen,'__file__',None)})\n "
         "\nexcept Exception as e: r.update({'comfy_kitchen_error':type(e).__name__+': '+str(e)})\n"
@@ -380,6 +381,17 @@ def runtime_compatibility(report: dict[str, Any]) -> dict[str, Any]:
         if probe.get("comfy_kitchen_error"):
             message = f"comfy-kitchen import failed in {probe.get('path')}: {probe['comfy_kitchen_error']}"
             errors.append(message + "; repair the ComfyUI/comfy-kitchen/Torch/extension ABI set before using W4A8")
+        arch_list = {str(item) for item in probe.get("torch_arch_list", []) if item}
+        if arch_list and isinstance(probe.get("torch_devices"), list):
+            for device in probe["torch_devices"]:
+                capability = device.get("capability") if isinstance(device, dict) else None
+                if isinstance(capability, list) and capability[:2] == [12, 0] and not any(
+                    item.startswith("sm_120") for item in arch_list
+                ):
+                    warnings.append(
+                        f"{device.get('name', 'Blackwell GPU')} requires a Torch build containing sm_120; "
+                        "update the ComfyUI environment before using the RTX 50-series acceleration path."
+                    )
     return {"status": "error" if errors else ("caution" if warnings else "ready"), "errors": errors, "warnings": warnings}
 
 

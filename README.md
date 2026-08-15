@@ -35,25 +35,13 @@ https://github.com/Rimagination/h3lite
 请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
 ```
 
-## 已验证电脑与默认路线
+## 基本配置
 
-H3 的运行表现由整套硬件共同决定。GPU 芯片、架构、显存容量、显存带宽、笔记本功耗、系统内存和磁盘都会影响能否运行以及生成速度；“8 GB 显存”本身不是充分条件。
+当前默认支持 **Windows + NVIDIA CUDA** 的本地低显存路线。8 GB 显存也可以尝试，但建议配 32 GB 系统内存和 SSD；12–16 GB 会更宽裕。
 
-| 已验证电脑 | GPU | CPU / 内存 | 路线与显存模式 |
-|---|---|---|---|
-| 机械革命翼龙 15 Pro 笔记本 | RTX 4070 Laptop，8 GB | Ryzen 7 8845H / 32 GB | `LOW_VRAM`；Set A 已验证 T2VA/I2VA，Set B 兼容图已验证 T2VA；原生声音 |
-| Windows 10 台式机 | RTX 4060 Ti，16 GB | i5-13400F / 32 GB | Set B；`NORMAL_VRAM`；T2VA/I2VA；原生声音 |
+AMD/ROCm、RTX 50 系列新架构和原生 BF16 H3 不在当前默认验证范围内，Agent 会先做兼容性判断，不会仅凭显存容量承诺“能跑”。详细硬件、组件和分辨率说明见 [`references/deployment-matrix.md`](references/deployment-matrix.md)。
 
-同一套 Set B 模型、兼容工作流、提示词、seed 和 `640×352 / 124 帧 / 4 步` 参数下：
-
-| GPU | ComfyUI 纯生成时间 | 结果 |
-|---|---:|---|
-| RTX 4060 Ti 16 GB | 77.08 秒 | 画面连贯，原生声音正常 |
-| RTX 4070 Laptop 8 GB | 591.22 秒 | 画面连贯，原生声音正常 |
-
-这组数据不是芯片跑分。RTX 4060 Ti 16 GB 可以让更多模型权重常驻显存；RTX 4070 Laptop 8 GB 需要动态加载和内存卸载。Agent 会读取具体 GPU 型号与显存，并结合系统内存、磁盘、目标分辨率和时间预算规划路线。
-
-默认从成功率最高的 `fast` 路线开始：4 步、原生音频、短视频和较小画布。基线跑通后，再逐步提高分辨率、时长或采样步数。
+默认从 `fast` 路线开始。质量档位、I2V/Ref2VA、人脸质量和时间预估由 Agent 根据实际环境自动选择；这些判断不会给视频推理图增加额外采样或模型。
 
 ## 快速验证：红球弹跳
 
@@ -133,40 +121,15 @@ H3 的运行表现由整套硬件共同决定。GPU 芯片、架构、显存容�
 
 T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动选择。Ref2VA 使用与参考素材匹配的工作流。
 
-## 安装位置与组件下载
+## 安装
 
-### 先确定安装位置
+把仓库交给 Agent，并说明希望复用的 ComfyUI 目录；例如：
 
-H3 Lite 支持三种方式：
+```text
+请帮我安装 H3 Lite，把 MiniMax H3 和 ComfyUI 放到 F:\MiniMax-H3；如果已有健康环境就直接复用。
+```
 
-| 方式 | 位置 | 适合情况 |
-|---|---|---|
-| 复用现有环境 | 你已有的 `<ComfyUI>` | 已经安装并希望保留现有模型和节点 |
-| 独立目录 | 如 `F:\MiniMax-H3\ComfyUI` | 推荐；避免占用系统盘或污染项目 |
-| 当前项目 | `<项目>\.h3lite\ComfyUI` | 希望环境随项目保存 |
-
-Agent 在下载大文件之前应明确显示 ComfyUI、模型、节点和输出目录。
-
-### 只选择一套组件
-
-不要混用 Set A 与 Set B。百度网盘包已经整理对应模型、节点、工作流和清单：
-
-| 组件集 | 已验证起点 | 分享链接 | 提取码 |
-|---|---|---|---|
-| Set A | RTX 4070 Laptop 8 GB + 32 GB 内存，低显存快速路线 | [百度网盘](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
-| Set B | RTX 4060 Ti 16 GB + 32 GB 内存，FP8 兼容路线；T2VA 也在 RTX 4070 Laptop 8 GB 上验证 | [百度网盘](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
-
-下载一个完整方案即可。将包内的 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，导入 `workflows` 中的 JSON，并保留 `component-manifest.json`。百度网盘不可用时，按 [`references/component-sets.md`](references/component-sets.md) 中登记的文件名、大小和哈希从上游来源下载。
-
-### 手动安装 Skill
-
-不使用 Agent 安装时，打开仓库页面，选择 **Code → Download ZIP**。解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
-
-## 组件完整性
-
-H3 Lite 把扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、工作流和节点版本视为一套组件，不会按文件名随意混搭。
-
-Set B 曾出现过“文件大小正确、内容损坏”的 W4A8 主模型，生成结果是彩色马赛克。H3 Lite 会在首次使用或文件变化后校验已登记的 SHA-256，并缓存结果；正常复跑不会重复计算大文件哈希。
+Agent 会在下载和运行前检查目录、组件、驱动、显存、系统内存和磁盘。组件集、模型角色、校验和修复流程放在 [`references/component-sets.md`](references/component-sets.md) 与 [`references/deployment-matrix.md`](references/deployment-matrix.md)，不需要用户在 README 里手动拼配置。
 
 ## 参考资料
 
@@ -175,6 +138,7 @@ Set B 曾出现过“文件大小正确、内容损坏”的 W4A8 主模型，�
 - [H3 prompt-writing skill](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing)
 - [完整组件集与校验值](references/component-sets.md)
 - [硬件、分辨率与部署矩阵](references/deployment-matrix.md)
+- [人脸质量与零推理开销策略](references/face-quality.md)
 
 ## License
 
