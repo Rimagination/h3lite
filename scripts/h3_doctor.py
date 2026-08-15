@@ -407,7 +407,7 @@ def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dic
     blockers: list[str] = []
     if usable_vram < 5.5:
         blockers.append(f"reported VRAM is only {usable_vram:.2f} GB")
-    if ram and ram < 24:
+    if ram and ram < 16:
         blockers.append(f"system RAM is {ram:.2f} GB")
     if free_disk and free_disk < 35:
         blockers.append(f"free disk is {free_disk:.2f} GB")
@@ -422,7 +422,12 @@ def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dic
             reasons.append(f"Only {ram:.2f} GB system RAM was reported; 32 GB is the community-tested 6 GB reference point.")
         return {"name": "experimental-6gb", "confidence": "low", "reasons": reasons}
     if usable_vram < 10:
-        return {"name": "low-vram-w4a8", "confidence": "high", "reasons": ["Use the tested W4A8/4B/4-step profile first."]}
+        reasons = ["Use the tested W4A8/4B/4-step profile first."]
+        confidence = "high"
+        if ram and ram < 24:
+            confidence = "medium"
+            reasons.append("16 GB system RAM is validated only with the RTX 3060 Ti 8 GB floor case; 32 GB is recommended for other 8 GB GPUs.")
+        return {"name": "low-vram-w4a8", "confidence": confidence, "reasons": reasons}
     if usable_vram < 16:
         return {"name": "w4a8-mid", "confidence": "medium", "reasons": ["Keep W4A8 as the reproducible baseline; scale only after a smoke test."]}
     reasons = ["Use a validated W4A8 component set first; 16 GB VRAM alone does not prove that the native route fits system RAM or its quantized kernels."]

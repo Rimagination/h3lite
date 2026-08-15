@@ -37,7 +37,7 @@ Install MiniMax H3 and ComfyUI under F:\MiniMax-H3. Reuse the environment if it 
 
 ## Validated computers and default route
 
-H3 performance depends on the complete hardware configuration. GPU model and architecture, VRAM capacity and bandwidth, laptop power limits, system RAM, and storage all affect feasibility and speed; “8 GB VRAM” alone is not a sufficient requirement.
+H3 performance depends on the complete hardware configuration. GPU model and architecture, VRAM capacity and bandwidth, laptop power limits, system RAM, and storage all affect feasibility and speed; “8 GB VRAM” alone is not a sufficient requirement. The lowest configuration validated for the current W4A8 route is an RTX 3060 Ti with 8 GB VRAM and 16 GB system RAM; 32 GB system RAM remains the recommended target.
 
 | Validated computer | GPU | CPU / RAM | Route and memory mode |
 |---|---|---|---|
