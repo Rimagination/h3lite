@@ -1,5 +1,6 @@
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -87,6 +88,33 @@ class PlanningContractTests(unittest.TestCase):
 
         self.assertTrue(low["decision"]["launch_profile"]["lowvram"])
         self.assertFalse(high["decision"]["launch_profile"]["lowvram"])
+
+    def test_plan_can_reuse_one_unambiguous_variant_timing_sample(self):
+        from h3_plan import build_plan
+
+        with tempfile.TemporaryDirectory() as tmp:
+            timing_path = Path(tmp) / "timing.json"
+            timing_path.write_text(json.dumps({
+                "schema_version": 1,
+                "entries": {
+                    "quality|768x416|124|24|8|I2VA|lora=known;cache=0;sv=12;sa=3": {
+                        "samples_seconds": [451.84, 526.47]
+                    }
+                }
+            }), encoding="utf-8")
+            plan = build_plan(
+                self.report_8gb,
+                mode="quality",
+                aspect="landscape",
+                video_seconds=5,
+                resolution="768x432",
+                timing_file=timing_path,
+                reference_mode="I2VA",
+            )
+
+        self.assertEqual(plan["estimate"]["confidence"], "empirical")
+        self.assertEqual(plan["estimate"]["sample_count"], 2)
+        self.assertIn("lora=known", plan["estimate"]["timing_key"])
 
 
 class GenerateProfileTests(unittest.TestCase):

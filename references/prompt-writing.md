@@ -57,6 +57,17 @@ complete silence is explicitly requested.
 
 Useful camera vocabulary includes `Zoom`, `Push`, `Pan`, `Truck`, `Tilt`, `Pedestal`, `Arc`, `Tracking`, `Static`, `Shake`, `POV`, and `Roll`. When a camera move matters, state its type plus a useful amplitude and speed, such as a slow, subtle push-in or a fast handheld shake.
 
+For cinematic or film-like requests, also use
+[`cinematic-prompting.md`](cinematic-prompting.md). It adds a pre-writing film
+decision card without changing H3's required fields: relationship pressure,
+audience position, gaze flow, practical color thesis, capture base, and
+anti-template checks.
+
+For complex multimodal or full-reference requests, use
+[`official-h3-insights.md`](official-h3-insights.md) as a compact guide to the
+official Context-IR mindset, reference-role labels, retention analysis, and
+local-vs-official capability boundaries.
+
 ## Camera position and subject orientation
 
 Describe subject orientation separately from camera movement. A location or
@@ -102,6 +113,26 @@ Define references before referring to them. Use stable names such as `Subject A`
 - Preserve on-screen words exactly in double quotation marks. Do not translate, paraphrase, or silently correct visible text.
 - If a cut interrupts speech, describe the transition and use the guide's cutoff convention rather than inventing the missing words.
 - Use `<scenetrans>` when a scene transition carries speech across a cut, and `<cutoff>` when a cut intentionally truncates speech.
+
+H3 should not be treated as “unable to make dialogue” without a measured
+failure. The official base guide models speakers, dialogue, singing, and
+diegetic audio, and a local W4A8/ClipProj test has produced clear speech in a
+realistic live-action two-person scene. On the bundled simplified route,
+natural-language dialogue is a valid default:
+
+```text
+The middle-aged man (S1), with a low and slightly tired voice, looks toward the woman and says in Mandarin: "你吃了没？" She pauses, then answers in a softer voice: "还没。"
+```
+
+Use exact user-provided words and keep the order of turns observable. The
+official `<d>` marker and `<scenetrans>` notation are valuable when the graph
+accepts the official prompt schema, but they are not universal tokens. Inspect
+the selected workflow before adding them to a simplified ClipProj prompt.
+
+For a new dialogue capability, separate the test questions: inspect frames for
+realistic people and inspect/listen to the audio for speech intelligibility.
+The presence of an audio stream or a frequency band alone does not prove that
+the requested words were spoken clearly.
 
 ## An operational writing pattern
 

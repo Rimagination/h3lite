@@ -2,6 +2,13 @@
 
 This reference is for a Windows workstation running ComfyUI with an NVIDIA GPU. It is a decision aid, not a promise that every GPU can run every H3 graph. Measure the installed machine first and keep the exact model, node, ComfyUI, PyTorch, and CUDA versions in the handoff record.
 
+## Backend and architecture compatibility
+
+- The validated low-VRAM route is **Windows + NVIDIA CUDA**. VRAM capacity and backend compatibility are separate gates.
+- AMD GPUs such as the RX 7900 XT may have enough VRAM in theory, but the current H3 Lite component sets and acceleration nodes are not an AMD/ROCm-validated route. Report this as experimental or offer another backend; do not promise local success from the VRAM number alone.
+- RTX 50-series cards need a current Torch/CUDA build containing the matching Blackwell architecture (for example `sm_120`) before optional acceleration nodes are enabled. The doctor performs this check without loading the video model.
+- These checks run during doctor/preflight only. They must not add nodes, sampling steps, model passes, or generation-time work to an otherwise valid graph.
+
 ## Installation target and directory layout
 
 Select the target before downloading anything. The agent must show the
