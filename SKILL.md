@@ -5,7 +5,22 @@ description: Use when configuring, repairing, planning, or running MiniMax H3 lo
 
 # MiniMax H3 Local Video
 
-Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMax H3 audio-video workstation and to generate short clips through ComfyUI. Treat path selection, hardware-aware planning, prompt writing, execution, timing, and verification as one workflow. The default is the validated fast route; other modes must be chosen explicitly or justified by a time budget.
+Use this skill to turn a user's local computer into a reproducible MiniMax H3 audio-video workstation and to generate short clips. The validated primary route is Windows + NVIDIA + ComfyUI; macOS Apple Silicon is a community/experimental alternative, not an equivalent tested backend. Treat platform selection, path selection, hardware-aware planning, prompt writing, execution, timing, and verification as one workflow. The default is the validated fast route; other modes must be chosen explicitly or justified by a time budget.
+
+## Platform scope and routing
+
+Detect the operating system and accelerator before giving installation commands or model links. Do not give CUDA, Windows virtual-environment, `.bat`, or Windows path instructions to a macOS user.
+
+| Platform | h3lite status | Guidance |
+| --- | --- | --- |
+| Windows + NVIDIA CUDA | Primary, locally validated | Use the ComfyUI/H3 Lite fast path and the Windows doctor/planner/preflight scripts. |
+| macOS Apple Silicon | Community alternative, not h3lite-equivalent | Explain that the documented ComfyUI route is not validated on Metal. Offer the MLX/`mmh3turbo` route as an optional external alternative, with its own weights, commands, and timing. |
+| macOS Intel | Not recommended | Do not promise local H3 generation; suggest a hosted/API or another backend. |
+| Linux + NVIDIA | Unverified | The model concepts may transfer, but Windows paths, packaged nodes, and timings do not. Require an explicit experimental choice. |
+
+For a non-Windows user, preserve the useful cross-platform guidance (prompt structure, 32-pixel canvas alignment, low-resolution preview, disk/log/output checks), but label every resource and timing as platform-specific. A community implementation that can run H3 on a Mac is evidence for feasibility, not evidence that this ComfyUI skill supports Metal.
+
+The Mac alternative described in the project notes uses MLX/Metal and a third-party `mmh3turbo` package. If a Mac user explicitly chooses that route, point them to the author's [community bundle](https://huggingface.co/yunfengwang/mmh3turbo-bundles) and package (`uvx mmh3turbo`), and state that these are external resources with independent licensing, updates, and validation. It may reduce the download footprint with GGUF/4-bit bundles, but it is outside this skill's tested component sets. Do not silently install it, mix its weights with ComfyUI models, or present its 30–43 minute 5-second 720p timings as Windows benchmarks.
 
 ## Operating rules
 
@@ -13,9 +28,11 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - **Keep cold work out of the hot path:** model download manifests, hash or size verification, Torch/custom-node repair, repository checks, browser workflow discovery, and full recursive doctor scans belong to installation, migration, repair, or first-run validation. A normal generation on an unchanged machine must not pay those costs.
 - **Cold path can be heavier when it prevents hour-scale waste:** during installation or repair, verify download source, target folder, expected size/hash when available, runtime imports, and model-role mapping before queueing. Store the result so later prompts reuse it instead of repeating it.
 - Inspect before changing anything. Run `scripts/h3_doctor.py --json` and locate the target ComfyUI directory before installing packages, nodes, or weights.
+- On first contact, run a platform/accelerator check before the Windows doctor. If the machine is not Windows + NVIDIA, stop the CUDA installation branch and route the user using the platform matrix above.
 - Prefer an isolated ComfyUI directory when no installation is supplied. Never overwrite an existing installation or silently replace model files.
 - Keep the deployment path configurable. Do not copy paths from another computer into scripts or workflows.
 - Report required disk space before large downloads. Use resumable downloads and verify file size or hash when a source provides one.
+- Before a long generation or multi-shot batch, check free space and pagefile headroom and keep per-shot logs. A pipeline that filters away the process exit code or traceback is not a successful run; preserve the full log and stop on the first failed shot.
 - If the user can only download from the public internet, run a cold-path download plan before fetching multi-GB files: test candidate raw URLs with a small ranged download, choose the fastest stable source, estimate wall-clock time, then use resumable `.part` downloads. Do not pretend scripts can beat the user's real bandwidth.
 - Before downloading large assets, run the doctor compatibility probe. Stop on a Torch import error; treat a comfy-kitchen/Torch mismatch as a repair decision, not a post-download surprise. Do not silently substitute model files or start unlimited parallel downloads.
 - Treat the diffusion checkpoint, text encoder, Turbo LoRA, workflow, and node revisions as one component set. Read `references/component-sets.md` during installation, migration, model replacement, or kernel repair. Never construct an unvalidated set from individually plausible filenames.
@@ -24,7 +41,8 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Prefer the ComfyUI HTTP API with an API-format workflow JSON. Use browser/CDP capture only as a recovery path when no reusable workflow JSON exists.
 - Check `http://127.0.0.1:8188/system_stats` before starting anything. If ComfyUI is already healthy, reuse it and do not restart it or rediscover its workflow history.
 - Preserve MiniMax H3's audio path and flow/sigma-shift handling when the user wants native audio. Do not remove audio VAE, audio conditioning, or the H3 sampling node merely to make a graph look simpler.
-- **Face-quality routing:** if the user needs a recognizable or speaking human face, do not treat low-VRAM W4A8 T2VA at 640x352 as a final-quality route. Prefer I2VA with a clear first-frame reference; prefer Ref2VA when identity must persist across shots. Read `references/face-quality.md` before selecting that route. These checks may change prompt routing or post-generation inspection, but must not add sampling steps, extra generation models, or a second inference pass.
+- **Zero-inference optimization constraint:** hardware compatibility checks, timing calibration, face routing, and media QA may run before or after generation, but must not add sampling steps, extra generation models, or a second video inference pass. Keep the selected graph unchanged unless the user explicitly requests a different quality profile.
+- **Face-quality routing:** if the user needs a recognizable or speaking human face, do not treat low-VRAM W4A8 T2VA at 640x352 as a final-quality route. Prefer I2VA with a clear first-frame reference; prefer Ref2VA when identity must persist across shots. Read `references/face-quality.md` and inspect whether the official Ref2VA checkpoint/text encoder are actually installed before selecting that route. A registered `MiniMaxH3ReferenceToVideo` node alone is not enough.
 - On current ComfyUI builds, the API class `MiniMaxH3SigmaShift` is the native `ModelSamplingMiniMaxH3` node and uses the merged `ModelSamplingAV` video/audio schedule fix. Detect it by `/object_info` or the local source before adding a custom dual-clock sampler; do not duplicate the fix merely because the API class keeps its compatibility name.
 - Run the read-only planner before a non-trivial generation. It must report selected mode, resolution, steps, cache policy, paths, and an estimated time range. Do not present an estimate as a guarantee.
 - Run the read-only preflight after the doctor and planner. Treat low available RAM/VRAM as a caution, but stop when the pagefile is critically low, required assets are missing, or the doctor recommends an alternative backend.
@@ -35,6 +53,7 @@ Use this skill to turn a user's local NVIDIA computer into a reproducible MiniMa
 - Keep agent-facing status compact: omit ComfyUI's full history graph by default; use verbose history only when diagnosing a failure.
 - Never submit an identical configuration while its manifest is `submitting`, `queued`, or `running`. Return the existing prompt ID instead; use `--allow-duplicate` only when the user explicitly asks for a second identical run.
 - Treat low-VRAM timing as an empirical estimate. The first run can be much slower because kernels compile and weights move between system RAM and VRAM.
+- For expensive renders, use a cheap preview pass first: validate the complete prompt/shot list at the smallest supported canvas (for example 256p or the local fast bucket), then promote only approved shots to the requested resolution. This is especially important for multi-shot work; it is a planning optimization, not a second quality-generation pass for a single requested clip.
 - Prefer `NORMAL_VRAM` when a validated 16 GB system can keep Set B resident. In a same-model/workflow/prompt/seed 640x352 comparison, an RTX 4060 Ti 16 GB run took 77.08 seconds versus 591.22 seconds on an RTX 4070 Laptop 8 GB using `LOW_VRAM`; treat dynamic loading/offload as the main operational explanation, not as a pure GPU benchmark or a promise.
 - When launching ComfyUI as a background process, redirect stdout and stderr to persistent files. A detached pipe can become invalid after the launching session is cleaned up, leaving ComfyUI alive but causing tqdm/logger writes to fail with `OSError: [Errno 22] Invalid argument`. On that signature, restart ComfyUI with persistent logs; do not redownload models or rerun a full doctor unless the restart exposes another error.
 - Keep media verification attached to the selected ComfyUI root. The verifier searches system `PATH`, `H3LITE_FFPROBE`, and common locations in or beside `<ComfyUI>` for `ffprobe`; both `h3_generate --watch` and standalone `h3_status` must receive or infer that root. Standalone status may infer the parent only when `--output-dir` points exactly `<ComfyUI>\output`; otherwise pass `--comfyui` explicitly. Treat `ffprobe_not_found` as a missing verifier, not evidence that generation failed, and do not requeue the video until the existing output has been inspected.
@@ -141,6 +160,12 @@ canvas, while H3 Lite's `640x352` remains the low-VRAM fast baseline. If the
 user asks for "official template size", "normal quality", or "0.4MP", use
 `--megapixels 0.4` unless hardware/time preflight blocks it.
 
+The 32-pixel alignment is a practical model/decoder constraint: the VAE's
+16-pixel spatial reduction and the DiT's 2-pixel patching must both align. Do
+not advertise consumer labels such as "720p" as exact model sizes when the
+nearest legal canvas is different; report the actual canvas (for example
+`1280x704`) and keep the requested label as a human-friendly preset name.
+
 For a prompt with several ordered actions, prioritize adherence before pixels.
 Use the fast 640x352 baseline first; 736x416 is an experimental adherence
 bucket between the fast canvas and 0.4 MP. Do not assume 768p follows complex
@@ -242,14 +267,10 @@ python scripts/h3_doctor.py `
 Record GPU name and VRAM, system RAM, free disk, Python, CUDA/PyTorch visibility, ComfyUI location, model presence, and custom-node presence. If there is no NVIDIA CUDA device, do not promise this local CUDA route; explain the limitation and offer API/cloud or another backend as an alternative.
 
 The doctor also records available physical RAM, available Windows pagefile, and
-GPU compute processes. The lowest configuration validated by this project is an
-RTX 3060 Ti with 8 GB VRAM and 16 GB system RAM on the W4A8 route. Treat that
-as a conservative fast/smoke-test floor, not a promise for every 8 GB card;
-32 GB RAM remains the recommended target. Low available RAM or VRAM is a
-warning because the validated 8 GB route can finish with offload. A nearly
-exhausted pagefile is different: it previously caused
-`hostbuf_file_reader_read failed` and system-level paging failures, so
-`h3_preflight.py` blocks that run.
+GPU compute processes. Low available RAM or VRAM is a warning because the
+validated 8 GB route can still finish with offload. A nearly exhausted
+pagefile is different: it previously caused `hostbuf_file_reader_read failed`
+and system-level paging failures, so `h3_preflight.py` blocks that run.
 
 Use `references/deployment-matrix.md` to choose a profile. For an 8 GB laptop, start with the tested W4A8 profile, not the larger official INT8/32B profile.
 
@@ -259,11 +280,11 @@ ComfyUI, nodes, Python packages, or model weights.
 
 ### 2. Select a profile
 
-- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, 640x352, 124 frames, and 4 steps. The launch profile uses `--lowvram` for the very-low/8 GB tiers; the 8 GB + 16 GB RAM floor is validated on RTX 3060 Ti and should stay on this conservative baseline. 10–16 GB systems use normal VRAM mode unless preflight or a prior OOM justifies offload. Use Block Cache only when its classes are actually loaded; otherwise use the compatibility workflow. This is the success-rate baseline.
+- **Fast (default):** a registered W4A8/4B/Turbo component set, 4B ClipProj, FP16 video VAE, FP32 audio VAE, 640x352, 124 frames, and 4 steps. The launch profile uses `--lowvram` for the very-low/8 GB tiers; 10–16 GB systems use normal VRAM mode unless preflight or a prior OOM justifies offload. Use Block Cache only when its classes are actually loaded; otherwise use the compatibility workflow. This is the success-rate baseline.
 - **Balanced:** keep the low-VRAM canvas on an 8 GB laptop, use 6 steps, and bypass Block Cache. On a mid/high-VRAM machine, the planner may select 864x480.
 - **Quality:** use 8 steps and bypass Block Cache. On an 8 GB laptop, keep 640x352 and warn that W4A8/4B remains a quality ceiling; on a mid/high-VRAM machine, the planner may select 864x480.
 - **6 GB experimental:** when the machine has roughly 6 GB VRAM, 32 GB system RAM, an SSD, and sufficient pagefile headroom, permit a cautious first run at 608x352, 4 steps, and low-VRAM offload. Treat community timings as orientation only: reported I2V runs include about 345 seconds at 608x352/4 seconds and 441 seconds at 864x480/5 seconds, while another 640x480/5-second report took about 13.7 minutes. These used different official/community model and workflow combinations, so do not transfer the numbers to the bundled W4A8 graph as a promise.
-- **Below roughly 6 GB or below 16 GB system RAM:** stop before downloading or queueing. Explain the missing capacity and propose a hosted/API or alternative model. For an unvalidated 8 GB GPU paired with only 16 GB RAM, keep the warning and require a conservative smoke test rather than generalizing from the RTX 3060 Ti result.
+- **Below roughly 6 GB or insufficient RAM/disk:** stop before downloading or queueing. Explain the missing capacity and propose a hosted/API or alternative model.
 
 Do not infer that a smaller file or INT8 label is automatically faster. On low-VRAM systems, CPU offload, RAM bandwidth, kernel compatibility, and first-run compilation often dominate.
 
@@ -353,48 +374,13 @@ Identify the generation mode before writing:
 - last-frame image → `L2VA`
 - reusable images/video/audio references → `Ref2VA`
 
-Read `references/prompt-writing.md` when composing or revising a prompt. For
-complex multimodal requests, also read `references/official-h3-insights.md`.
-Use the exact field names and ordering required by that mode. For native base
-modes, the core order is:
+Read `references/prompt-writing.md` when composing or revising a prompt. Use the exact field names and ordering required by that mode. For native base modes, the core order is:
 
 ```text
 integrated_multimodal_description: ...
 overall_soundscape: ...
 non_diegetic_music: ...
 ```
-
-When the user asks for a cinematic, film-like, short-film, trailer, or
-电影感 result, also read `references/cinematic-prompting.md` and activate
-cinematic mode. Do not treat “cinematic” as a list of filters. First decide
-the scene's irreducible conflict, the audience's physical position, the
-relationship pressure shaping the composition, the gaze flow through the
-frame, a color thesis grounded in practical sources, and a plausible capture
-base. Then translate those decisions into the same H3 fields above.
-
-For cinematic mode:
-
-- Prefer one motivated continuous shot for a 5-second action; add a cut only
-  when it reveals new information. Use no more than two shots in a short clip
-  unless the user explicitly asks for a montage.
-- Describe camera motion with type, amplitude, and speed, such as a small,
-  slow push-in or a large, fast pan. Do not stack contradictory camera moves.
-- State camera height, distance, focal-length range, subject scale, focus
-  plane, and the reason for any foreground obstruction when those choices
-  control the film grammar.
-- Make the main action observable and causal. Replace “poetic”, “epic”,
-  “beautiful”, or “cinematic” adjective piles with who moves, what changes,
-  and what remains unresolved at the end.
-- Ground color in clothing, walls, weather, practical lights, materials, or
-  reflections. Do not default to teal-orange grading, blue-gray darkness,
-  heavy fog, particles, rim light, glossy skin, or game-key-art lighting.
-- Keep `overall_soundscape` and `non_diegetic_music` explicit. Preserve native
-  H3 audio unless the user requests complete silence; “no dialogue” still
-  permits ambience and action sounds.
-- Run the cinematic anti-template check before submission: the shot must not
-  read as an advertisement, game concept art, generic AI wallpaper, or TV
-  drama blocking, and the gaze flow must be explainable by this subject and
-  event rather than a reusable template.
 
 For user-facing 5-second quick-start examples, teach the same idea as a memorable three-part structure: **scene and atmosphere → action and camera → sound**. Present it as one natural-language prompt that can be copied directly; do not require users to write schema labels. Treat this as an explanation aid, then translate it internally into the workflow's required prompt schema.
 
@@ -414,40 +400,9 @@ Make the prompt operational:
 - use stable speaker IDs and exact text for dialogue;
 - use `N/A` for music only when no non-diegetic music is desired, and use `overall_soundscape: N/A` only for explicitly complete silence.
 
-For complex prompts, emulate the official context-building discipline even
-when the local route does not include H3-Context-IR: resolve reference roles,
-subject identity, temporal anchors, retention requirements, audio roles, and
-task type before writing the timeline. For `Ref2VA`, keep `<Subject N>`,
-`<Picture N>`, `<Video N>`, and `<Audio N>` labels stable across every section;
-do not treat the presence of a video or audio file as automatic video editing
-or audio reuse.
-
-The official system supports 4–15 second output, 24 FPS, 32 kHz stereo audio,
-and up to 2K through the separate H3-Regenerate-2K stage. These are official
-system facts, not promises for the local W4A8 route: keep the validated
-5-second/640x352 baseline unless the planner and installed workflow approve a
-larger duration or canvas, and describe 2K as an official multi-stage/API path
-unless a local equivalent is actually installed.
-
-Do not claim that H3 cannot generate realistic human dialogue, singing, or
-live-action people without a failed, reproducible run. H3 is an audiovisual
-model and the official guide explicitly includes speakers, dialogue, singing,
-and diegetic audio. A local W4A8/ClipProj test has also produced a realistic
-live-action two-person dialogue clip with clearly audible speech; treat this as
-an empirical capability, not a guarantee for every prompt, checkpoint, step
-count, or hardware profile.
-
-For dialogue requests, prefer a short 5-second capability test before
-proposing a TTS pipeline: use natural-language dialogue with exact quoted
-lines on the bundled simplified route, describe each speaker's identity and
-turn-taking, and verify the resulting audio. Use the official `<d>`, `(S1)` and
-`<scenetrans>` notation only when the selected graph accepts the official
-schema; do not force those tags into a ClipProj prompt that expects natural
-language. Verify visual realism and speech separately: frame inspection shows
-the person, an audio stream check shows audio exists, and listening or speech
-analysis is required to establish that the words are intelligible.
-
 If the selected ComfyUI graph uses a ClipProj/krea2 or another custom prompt schema, inspect its example workflow first. Adapt the official semantic structure to the node's accepted field while preserving the graph's required fields; do not blindly paste a T2VA prompt into a Ref2VA input or vice versa.
+- For a face-quality attempt, constrain the first shot to one face, a front or three-quarter orientation, visible eyes, stable hair/clothing anchors, and static or small-amplitude motion. Treat dialogue as a second-stage stressor. A valid MP4 with dynamic/color/audio checks can still have unusable faces; visually inspect face consistency at first/middle/last frames.
+- For Chinese prompts, avoid an extremely short noun-only description. H3's long multimodal sequence can make a one- or two-token Chinese prompt easy for the seed to dominate. Add concrete subject traits, setting, framing, lighting, and motion; as a practical starting point, use roughly 30–50 Chinese characters or an equivalent amount of structured detail, then validate with a cheap preview.
 
 ### 5. Generate through ComfyUI
 
@@ -577,9 +532,7 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `references/deployment-matrix.md`: tested low-VRAM profile, official fallback profile, model folders, node roles, launch flags, and failure triage.
 - `references/component-sets.md`: registered model/workflow sets, exact known byte sizes, runtime ABI record, and download-integrity rules.
 - `references/prompt-writing.md`: concise operational digest of MiniMax's official H3 prompt guide and prompt-writing skill.
-- `references/face-quality.md`: face-first routing, I2VA identity limits, Ref2VA requirements, and the zero-inference-cost quality policy.
-- `references/cinematic-prompting.md`: film-grammar extension for cinematic H3 prompts, including relationship pressure, gaze flow, practical color, camera grammar, and anti-template checks.
-- `references/official-h3-insights.md`: distilled official guidance on Context-IR thinking, reference roles, retention, audio/dialogue, timing, and local-route boundaries.
+- `references/face-quality.md`: face-first routing, official Ref2VA identity controls, low-VRAM trade-offs, and the limits of dynamic/color QA.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
 - `assets/h3_w4a8_i2v_api.json`: reusable low-VRAM I2VA graph with native first-frame input and optional acceleration patches.
@@ -601,3 +554,5 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - H3 Turbo ComfyUI nodes: <https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo>
 - Cinema DNA 21:9 × 3: <https://github.com/dacnay816y62-hub/cinema-dna-21x9x3>
 - Official H3 repository and prompting guidance: <https://github.com/MiniMax-AI/MiniMax-H3>
+- Community Mac/Metal MLX port and operational notes (reference only; not a tested h3lite backend): <https://zhuanlan.zhihu.com/p/2069479566171812707>
+- Community Apple Silicon local-deployment troubleshooting (reference only; not a Windows resource source): <https://mp.weixin.qq.com/s/hN60KLN7Pkpqb0pbk-r4WQ>

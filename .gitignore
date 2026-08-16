@@ -24,6 +24,7 @@ output/
 !assets/h3-lite-hero.mp4
 !assets/h3-lite-hero-poster.png
 !assets/h3-lite-hero.gif
+!assets/examples/h3lite-i2va-ramen-first-frame.jpg
 *.safetensors
 *.ckpt
 *.pt
