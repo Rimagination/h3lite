@@ -240,6 +240,46 @@ download pages, model hashes, dependency versions, or official docs during a
 normal generation unless the previous command returns a concrete error pointing
 there. If cache is valid, proceed directly to generation.
 
+### Native Windows progress window
+
+When the user wants to watch a run without opening a browser, add
+`--monitor-gui` to the fastpath command. It opens a native Windows Tkinter
+window and discovers the fresh H3 run manifest automatically. The window
+reuses the manifest's ComfyUI `client_id` and listens to the native `/ws`
+channel, including the newer `progress_state` node events, while HTTP polling
+supplies queue state, elapsed/estimated time, GPU memory, RAM, pagefile, output
+path, and failure state. It is monitor-only: closing it does not interrupt
+generation.
+The node count is structural workflow progress, not elapsed-time progress: H3
+nodes have very different runtimes. The window therefore shows node completion
+separately, displays the current node's observed runtime, and keeps ETA on the
+empirical timing estimate instead of treating `4/5` as `80%` of the time. The
+track is segmented by workflow node so completed, active, and pending nodes
+remain visually distinct.
+The default window is `760x620`; its content area has a vertical scrollbar and
+mouse-wheel support for smaller displays or larger system scaling.
+The monitor JSON marks these semantics as `progress_basis` (`node_completion`
+or `sampling_steps`) and `eta_basis` (`empirical` or `live_progress`) so an
+Agent can report them without inventing a time percentage.
+When available, elapsed time comes from the run manifest's measured execution
+time; the wall-clock timestamp is only the fallback before that field exists.
+Old `running` manifests are ignored during automatic discovery; pass
+`--prompt-id` to inspect a specific historical run.
+
+To open the monitor independently:
+
+```powershell
+python scripts/h3_monitor_gui.py `
+  --comfyui <ComfyUI-path>
+```
+
+Use `--once --no-websocket` for a one-shot JSON diagnostic. If the optional
+WebSocket client is unavailable, the window remains usable through HTTP
+polling, but the progress track stays static and explicitly reports that live
+quantifiable progress is unavailable. It never substitutes an animated bar
+for a measured percentage. An MCP wrapper is unnecessary for this local GUI;
+an Agent can query the same monitor JSON separately when it needs status.
+
 Use the lower-level `h3_doctor.py`, `h3_plan.py`, `h3_preflight.py`,
 `h3_generate.py`, and `h3_status.py` commands only for installation, recovery,
 custom workflows, or diagnosis. Never replace the fastpath with repeated
@@ -543,6 +583,7 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `scripts/h3_generate.py`: fast template-based or custom-workflow submission with profile, resolution, prompt/settings overrides, native first/last-frame binding, atomic A/B component-set selection, and queue-only mode.
 - `scripts/h3_status.py`: compact one-shot or bounded watch status, actual execution-time, media metadata verification, optional first/middle/last dynamic QA, and empirical timing-cache updates.
 - `scripts/h3_fastpath.py`: single-entry T2V/I2V route that reuses the environment cache, probes loaded node classes, routes component sets, and keeps queueing plus bounded verification in one command.
+- `scripts/h3_monitor_gui.py`: native Windows Tkinter progress window for live queue/sampling/resource/output visibility; it does not replace ComfyUI or interrupt a run.
 - `scripts/h3_paths.py`: Windows path normalization for `F:/...` and Git Bash `/f/...` inputs.
 - `scripts/h3_cleanup.py`: dry-run-first maintenance for old timestamped run snapshots; preserves environment state and recent runs.
 

@@ -219,6 +219,60 @@ def build_generate_command(
     return command
 
 
+def build_monitor_command(
+    *,
+    scripts_dir: str | Path = SCRIPT_DIR,
+    comfyui: str | Path,
+    base_url: str = "http://127.0.0.1:8188",
+    run_root: str | Path | None = None,
+    prompt_id: str | None = None,
+    topmost: bool = False,
+) -> list[str]:
+    """Build a detached native monitor command for an interactive Windows run."""
+    interpreter = Path(sys.executable)
+    if sys.platform.startswith("win"):
+        pythonw = interpreter.with_name("pythonw.exe")
+        if pythonw.is_file():
+            interpreter = pythonw
+    command = [
+        str(interpreter),
+        str(Path(scripts_dir) / "h3_monitor_gui.py"),
+        "--comfyui",
+        str(comfyui),
+        "--base-url",
+        base_url,
+    ]
+    if run_root is not None:
+        command.extend(["--run-root", str(run_root)])
+    if prompt_id:
+        command.extend(["--prompt-id", prompt_id])
+    if topmost:
+        command.append("--topmost")
+    return command
+
+
+def launch_monitor_gui(
+    *,
+    comfyui: str | Path,
+    base_url: str,
+    run_root: str | Path,
+    scripts_dir: str | Path = SCRIPT_DIR,
+    topmost: bool = False,
+) -> subprocess.Popen[Any]:
+    """Start the monitor without attaching it to the Agent's terminal."""
+    command = build_monitor_command(
+        scripts_dir=scripts_dir,
+        comfyui=comfyui,
+        base_url=base_url,
+        run_root=run_root,
+        topmost=topmost,
+    )
+    flags = 0
+    if sys.platform.startswith("win"):
+        flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "DETACHED_PROCESS", 0)
+    return subprocess.Popen(command, cwd=str(Path(scripts_dir).parent), creationflags=flags, close_fds=True)
+
+
 def _parse_json_output(output: str) -> dict[str, Any]:
     text = (output or "").strip()
     if not text:
@@ -455,6 +509,7 @@ def select_workflow_template(
 
 
 def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
+    monitor_gui = bool(getattr(args, "monitor_gui", False))
     reference_mode = resolve_reference_mode(args)
     reference_mode_label = REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper())
     comfyui = normalize_windows_path(args.comfyui).resolve()
@@ -598,7 +653,31 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
                 "acceleration": _acceleration_capabilities(routing_doctor),
             },
             "generation_command": generation_command,
+            "monitor_gui": {
+                "enabled": monitor_gui,
+                "command": build_monitor_command(
+                    comfyui=comfyui,
+                    base_url=args.base_url,
+                    run_root=run_root,
+                )
+                if monitor_gui
+                else None,
+            },
         }
+
+    monitor_process = None
+    monitor_error = None
+    if monitor_gui:
+        try:
+            monitor_process = launch_monitor_gui(
+                comfyui=comfyui,
+                base_url=args.base_url,
+                run_root=run_root,
+            )
+        except OSError as exc:
+            # Monitoring is additive; a window launch failure must not cancel a
+            # valid generation request.
+            monitor_error = str(exc)
 
     generation = _run_json(generation_command, timeout=args.watch_timeout + 120)
     return {
@@ -612,6 +691,11 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         "component_candidates": component_candidates,
         "generation": generation,
         "prompt_id": generation.get("prompt_id"),
+        "monitor_gui": {
+            "enabled": monitor_gui,
+            "pid": monitor_process.pid if monitor_process is not None else None,
+            "error": monitor_error,
+        },
     }
 
 
@@ -662,6 +746,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-doctor", action="store_true", help="invalidate the cached environment report")
     parser.add_argument("--watch-interval", type=float, default=DEFAULT_WATCH_INTERVAL)
     parser.add_argument("--watch-timeout", type=float, default=DEFAULT_WATCH_TIMEOUT)
+    parser.add_argument(
+        "--monitor-gui",
+        action="store_true",
+        help="open a native Windows progress window while the run is queued or running",
+    )
     parser.add_argument("--dynamic-check", dest="dynamic_check", action="store_true", default=True)
     parser.add_argument("--skip-dynamic-check", dest="dynamic_check", action="store_false")
     parser.add_argument("--allow-duplicate", action="store_true")
