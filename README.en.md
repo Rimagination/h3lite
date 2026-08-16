@@ -162,7 +162,7 @@ Without agent installation, open the repository page and choose **Code → Downl
 
 ## Watch progress without a browser
 
-On an interactive Windows run, add `--monitor-gui` to the fastpath command. H3 Lite opens a native progress window that reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, elapsed/estimated time, VRAM, RAM, pagefile, and the output path.
+On Windows, the fastpath opens the native progress window by default. Use `--no-monitor-gui` for a terminal-only run, or `--monitor-gui` to force it on. The window reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, elapsed/estimated time, VRAM, RAM, pagefile, and the output path.
 
 It does not require a browser, and closing the window does not interrupt generation. You can also open it independently; it will discover a fresh active H3 manifest:
 

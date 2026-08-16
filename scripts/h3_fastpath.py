@@ -508,8 +508,15 @@ def select_workflow_template(
     return "h3_w4a8_t2v" if accelerated else "h3_w4a8_t2v_compat"
 
 
+def resolve_monitor_gui(value: bool | None, *, platform: str | None = None) -> bool:
+    """Enable the native monitor by default on Windows desktop runs."""
+    if value is not None:
+        return bool(value)
+    return (platform or sys.platform).startswith("win")
+
+
 def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
-    monitor_gui = bool(getattr(args, "monitor_gui", False))
+    monitor_gui = resolve_monitor_gui(getattr(args, "monitor_gui", None))
     reference_mode = resolve_reference_mode(args)
     reference_mode_label = REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper())
     comfyui = normalize_windows_path(args.comfyui).resolve()
@@ -746,11 +753,20 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-doctor", action="store_true", help="invalidate the cached environment report")
     parser.add_argument("--watch-interval", type=float, default=DEFAULT_WATCH_INTERVAL)
     parser.add_argument("--watch-timeout", type=float, default=DEFAULT_WATCH_TIMEOUT)
-    parser.add_argument(
+    monitor_group = parser.add_mutually_exclusive_group()
+    monitor_group.add_argument(
         "--monitor-gui",
+        dest="monitor_gui",
         action="store_true",
-        help="open a native Windows progress window while the run is queued or running",
+        help="force the native progress window on",
     )
+    monitor_group.add_argument(
+        "--no-monitor-gui",
+        dest="monitor_gui",
+        action="store_false",
+        help="disable the native progress window for this run",
+    )
+    parser.set_defaults(monitor_gui=None)
     parser.add_argument("--dynamic-check", dest="dynamic_check", action="store_true", default=True)
     parser.add_argument("--skip-dynamic-check", dest="dynamic_check", action="store_false")
     parser.add_argument("--allow-duplicate", action="store_true")

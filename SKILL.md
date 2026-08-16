@@ -242,10 +242,12 @@ there. If cache is valid, proceed directly to generation.
 
 ### Native Windows progress window
 
-When the user wants to watch a run without opening a browser, add
-`--monitor-gui` to the fastpath command. It opens a native Windows Tkinter
-window and discovers the fresh H3 run manifest automatically. The window
-reuses the manifest's ComfyUI `client_id` and listens to the native `/ws`
+On Windows, the fastpath opens the native monitor by default, so every normal
+desktop generation has a visible progress window without an extra flag. Use
+`--no-monitor-gui` for a run that must stay terminal-only; `--monitor-gui`
+explicitly forces it on. The window discovers the fresh H3 run manifest
+automatically. It uses a native Windows Tkinter window, reuses the manifest's
+ComfyUI `client_id`, and listens to the native `/ws`
 channel, including the newer `progress_state` node events, while HTTP polling
 supplies queue state, elapsed/estimated time, GPU memory, RAM, pagefile, output
 path, and failure state. It is monitor-only: closing it does not interrupt
