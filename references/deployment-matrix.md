@@ -98,6 +98,12 @@ The same Set B models, compatibility workflow, prompt, seed, 640x352 canvas,
 | RTX 4060 Ti 16 GB desktop, i5-13400F, 32 GB RAM | `NORMAL_VRAM` | 77.08 s | coherent video and native audio |
 | RTX 4070 Laptop 8 GB, Ryzen 7 8845H, 32 GB RAM | `LOW_VRAM` with dynamic loading/offload | 591.22 s | coherent video and native audio |
 
+The same RTX 4070 Laptop machine also completed the bundled experimental
+multi-image Ref2VA graph with two references at `640x352`, 124 frames, and four
+steps in **472.11 s**. The output had native audio and passed technical media
+checks; identity and wardrobe continuity still require manual review. This is
+an observed local run, not a guarantee for every 8 GB GPU or reference count.
+
 The 7.7x observed gap is primarily consistent with model residency versus
 dynamic loading/offload. Do not attribute it to output caching or optional
 acceleration nodes: both runs performed real sampling with the compatibility

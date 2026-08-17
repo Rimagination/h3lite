@@ -103,6 +103,13 @@ non_diegetic_music: <audience-only music, or N/A>
 
 Define references before referring to them. Use stable names such as `Subject A`, `Picture 1`, or `Reference Video 1`; do not introduce an alias and then switch names. For every shot, specify composition, subjects, environment, actions, camera, and relevant sound/reference points. Do not leave a reference token, timestamp, or transformation unresolved.
 
+The bundled local Ref2VA graph binds repeated `--ref-image` arguments in order:
+the first image becomes `<Picture 1>`, the second `<Picture 2>`, and so on.
+Assign one job to each image (identity, scene, wardrobe/prop, pose, or style)
+and state its retention explicitly. The graph keeps the ClipProj encoder
+resident for image references; this is more memory-hungry than I2VA and must
+pass the local preflight before queueing.
+
 ## Dialogue, singing, and visible text
 
 - Use stable speaker IDs such as `(S1)` and `(S2)` across the whole prompt.
