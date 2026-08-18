@@ -98,6 +98,12 @@ The same Set B models, compatibility workflow, prompt, seed, 640x352 canvas,
 | RTX 4060 Ti 16 GB desktop, i5-13400F, 32 GB RAM | `NORMAL_VRAM` | 77.08 s | coherent video and native audio |
 | RTX 4070 Laptop 8 GB, Ryzen 7 8845H, 32 GB RAM | `LOW_VRAM` with dynamic loading/offload | 591.22 s | coherent video and native audio |
 
+The same RTX 4070 Laptop machine also completed the bundled experimental
+multi-image Ref2VA graph with two references at `640x352`, 124 frames, and four
+steps in **472.11 s**. The output had native audio and passed technical media
+checks; identity and wardrobe continuity still require manual review. This is
+an observed local run, not a guarantee for every 8 GB GPU or reference count.
+
 The 7.7x observed gap is primarily consistent with model residency versus
 dynamic loading/offload. Do not attribute it to output caching or optional
 acceleration nodes: both runs performed real sampling with the compatibility
@@ -259,6 +265,11 @@ Use configurable paths; the names below are the expected role and common filenam
 | 4-step acceleration | Registered LightX2V/Turbo LoRA from the selected component set | `models/loras` |
 
 The exact ClipProj folder can vary with the custom node version. Inspect its example workflow and node documentation instead of guessing.
+
+The bundled multi-image Ref2VA graphs reuse every role in this table; they do
+not introduce a separate Ref2VA checkpoint. The additional requirements are the
+native `MiniMaxH3ReferenceToVideo` node and a ClipProj `resident` image path,
+which changes VRAM residency rather than the disk component set.
 
 The bundled `assets/h3_w4a8_t2v_api.json` and `assets/h3_w4a8_i2v_api.json` are
 pinned to the validated

@@ -25,6 +25,7 @@ from urllib.request import Request, urlopen
 
 from h3_plan import parse_resolution
 from h3_paths import normalize_windows_path
+from h3_anchor import anchor_summary, build_anchor_sheet, write_anchor_sheet
 
 
 COMPONENT_SETS = {
@@ -265,6 +266,8 @@ def default_workflow_path(template: str) -> Path:
         "h3_w4a8_t2v_compat": skill_root / "assets" / "h3_w4a8_t2v_compat_api.json",
         "h3_w4a8_i2v": skill_root / "assets" / "h3_w4a8_i2v_api.json",
         "h3_w4a8_i2v_compat": skill_root / "assets" / "h3_w4a8_i2v_compat_api.json",
+        "h3_w4a8_ref2va": skill_root / "assets" / "h3_w4a8_ref2va_api.json",
+        "h3_w4a8_ref2va_compat": skill_root / "assets" / "h3_w4a8_ref2va_compat_api.json",
     }
     try:
         path = templates[template]
@@ -280,7 +283,12 @@ def _is_node_reference(value: Any) -> bool:
 
 
 def reference_mode(workflow: dict[str, Any]) -> str:
-    """Infer the H3 reference route from connected first/last frame inputs."""
+    """Infer the H3 reference route from the workflow's native reference node."""
+    if any(
+        isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+        for node in workflow.values()
+    ):
+        return "Ref2VA"
     has_first = False
     has_last = False
     for node in workflow.values():
@@ -382,6 +390,19 @@ def _bind_reference_field(
     inputs[field] = [loader_id, 0]
 
 
+def _bind_ref2va_image(
+    workflow: dict[str, Any],
+    h3_node: dict[str, Any],
+    index: int,
+    input_name: str,
+) -> None:
+    """Bind one staged image to the native Ref2VA autogrow input."""
+    # ComfyUI V3 autogrow inputs use dotted dynamic paths and zero-based
+    # template names internally; the prompt-facing labels remain Picture 1,
+    # Picture 2, ... in the order supplied by the user.
+    _bind_reference_field(workflow, h3_node, f"ref_images.ref_image_{index - 1}", input_name)
+
+
 def _remove_placeholder_first_frame(workflow: dict[str, Any]) -> None:
     """Turn the bundled I2V graph into L2VA when only a last frame is given."""
     placeholder_loaders: set[str] = set()
@@ -413,10 +434,33 @@ def bind_reference_images(
     *,
     first_frame: str | Path | None,
     last_frame: str | Path | None,
+    reference_images: list[str | Path] | None = None,
     comfyui: Path | None,
     stage: bool,
 ) -> dict[str, Any]:
-    """Bind CLI frame paths to native MiniMaxH3ImageToVideo inputs."""
+    """Bind CLI frame paths or multiple images to native H3 reference inputs."""
+    reference_images = list(reference_images or [])
+    ref2va_nodes = [
+        node
+        for node in workflow.values()
+        if isinstance(node, dict) and node.get("class_type") == "MiniMaxH3ReferenceToVideo"
+    ]
+    if ref2va_nodes:
+        if first_frame is not None or last_frame is not None:
+            raise RuntimeError("Ref2VA uses --ref-image; do not combine it with --first-frame or --last-frame")
+        if not reference_images:
+            raise RuntimeError("Ref2VA requires at least one --ref-image")
+        if comfyui is None:
+            raise RuntimeError("--comfyui is required when --ref-image is used")
+        bindings: list[dict[str, Any]] = []
+        for index, value in enumerate(reference_images, start=1):
+            binding = _stage_reference_image(value, comfyui, stage=stage)
+            for node in ref2va_nodes:
+                _bind_ref2va_image(workflow, node, index, binding["input_name"])
+            bindings.append({"role": f"ref_image_{index}", "label": f"Picture {index}", "binding": binding})
+        return {"mode": "Ref2VA", "inputs": {"ref_images": bindings}}
+    if reference_images:
+        raise RuntimeError("--ref-image requires a workflow with MiniMaxH3ReferenceToVideo")
     requested = {"first_frame": first_frame, "last_frame": last_frame}
     if not any(value is not None for value in requested.values()):
         return {"mode": reference_mode(workflow), "inputs": {}}
@@ -539,7 +583,7 @@ def effective_workflow_settings(workflow: dict[str, Any]) -> dict[str, Any]:
             continue
         class_type = str(node.get("class_type", ""))
         inputs = node["inputs"]
-        if class_type == "MiniMaxH3ImageToVideo":
+        if class_type in {"MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"}:
             for key in ("width", "height", "length"):
                 if key in inputs:
                     settings[key] = inputs[key]
@@ -650,6 +694,7 @@ def create_run_manifest(
     fingerprint: str,
     model_overrides: dict[str, str] | None = None,
     reference_inputs: dict[str, Any] | None = None,
+    anchor_sheet: dict[str, Any] | None = None,
 ) -> tuple[Path | None, dict[str, Any]]:
     if run_root is None:
         return None, {}
@@ -659,8 +704,11 @@ def create_run_manifest(
     prompt_path = run_dir / "prompt.txt"
     workflow_snapshot = run_dir / "workflow.api.json"
     manifest_path = run_dir / "manifest.json"
+    anchor_sheet_path = run_dir / "anchors.json"
     prompt_path.write_text(prompt, encoding="utf-8")
     workflow_snapshot.write_text(json.dumps(workflow, ensure_ascii=False, indent=2), encoding="utf-8")
+    if anchor_sheet:
+        write_anchor_sheet(anchor_sheet_path, anchor_sheet)
     record = {
         "schema_version": 1,
         "state": "submitting",
@@ -675,6 +723,8 @@ def create_run_manifest(
         "first_frame": getattr(args, "first_frame", None),
         "last_frame": getattr(args, "last_frame", None),
         "reference_inputs": reference_inputs or {},
+        "anchor_sheet_path": str(anchor_sheet_path) if anchor_sheet else None,
+        "anchor_summary": anchor_summary(anchor_sheet),
         "profile": args.profile,
         "audio_policy": audio_policy,
         "seed": args.seed,
@@ -772,7 +822,7 @@ def apply_overrides(workflow: dict[str, Any], args: argparse.Namespace) -> None:
         inputs = node["inputs"]
         if args.seed is not None and class_type == "RandomNoise" and "noise_seed" in inputs:
             inputs["noise_seed"] = args.seed
-        if class_type == "MiniMaxH3ImageToVideo":
+        if class_type in {"MiniMaxH3ImageToVideo", "MiniMaxH3ReferenceToVideo"}:
             if args.width is not None and "width" in inputs:
                 inputs["width"] = args.width
             if args.height is not None and "height" in inputs:
@@ -1119,7 +1169,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--workflow-template",
         default="h3_w4a8_t2v",
-        choices=["h3_w4a8_t2v", "h3_w4a8_t2v_compat", "h3_w4a8_i2v", "h3_w4a8_i2v_compat"],
+        choices=[
+            "h3_w4a8_t2v",
+            "h3_w4a8_t2v_compat",
+            "h3_w4a8_i2v",
+            "h3_w4a8_i2v_compat",
+            "h3_w4a8_ref2va",
+            "h3_w4a8_ref2va_compat",
+        ],
         help="bundled workflow used when --workflow is omitted",
     )
     prompt_group = parser.add_mutually_exclusive_group(required=True)
@@ -1129,6 +1186,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--prompt-field", help="input field on the prompt node, such as prompt or text")
     parser.add_argument("--first-frame", help="local first-frame image; binds MiniMaxH3ImageToVideo.first_frame")
     parser.add_argument("--last-frame", help="local last-frame image; binds MiniMaxH3ImageToVideo.last_frame")
+    parser.add_argument(
+        "--ref-image",
+        action="append",
+        default=[],
+        help="reference image for Ref2VA; repeat for Picture 1, Picture 2, ...",
+    )
+    parser.add_argument("--anchor-file", help="optional JSON declaration of identity/continuity anchors")
     parser.add_argument("--output-dir", help="local ComfyUI output directory used for verification")
     parser.add_argument("--comfyui", help="ComfyUI root used by --resolve-models")
     parser.add_argument(
@@ -1163,6 +1227,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--watch-timeout", type=float, default=3600.0, help="maximum seconds for --watch")
     parser.add_argument("--dynamic-check", dest="dynamic_check", action="store_true", default=True)
     parser.add_argument("--skip-dynamic-check", dest="dynamic_check", action="store_false")
+    parser.add_argument("--anchor-check", dest="anchor_check", action="store_true", default=True)
+    parser.add_argument("--skip-anchor-check", dest="anchor_check", action="store_false")
     parser.add_argument("--json", action="store_true", help="print a machine-readable result")
     return parser.parse_args()
 
@@ -1211,18 +1277,31 @@ def main() -> int:
             workflow,
             first_frame=args.first_frame,
             last_frame=args.last_frame,
+            reference_images=args.ref_image,
             comfyui=comfyui_path,
             stage=not args.dry_run,
         )
         validate_reference_placeholders(workflow)
         resolved_reference_mode = str(reference_inputs["mode"])
         resolved_audio_policy = apply_audio_policy(workflow, prompt, args.audio_policy)
+        anchor_sheet = build_anchor_sheet(
+            prompt,
+            reference_inputs,
+            reference_mode=resolved_reference_mode,
+            first_frame=args.first_frame,
+            last_frame=args.last_frame,
+            reference_images=args.ref_image,
+            settings=effective_workflow_settings(workflow),
+            anchor_file=args.anchor_file,
+        )
         if args.dry_run:
             result = {
                 "dry_run": True,
                 "workflow_path": str(workflow_path),
                 "target": target,
                 "reference_inputs": reference_inputs,
+                "anchor_sheet": anchor_sheet,
+                "anchor_summary": anchor_summary(anchor_sheet),
                 "audio_policy": resolved_audio_policy,
                 "config_fingerprint": config_fingerprint(workflow, prompt),
                 "effective_settings": effective_workflow_settings(workflow),
@@ -1286,6 +1365,7 @@ def main() -> int:
             fingerprint=fingerprint,
             model_overrides=model_overrides,
             reference_inputs=reference_inputs,
+            anchor_sheet=anchor_sheet,
         )
         if component_integrity is not None:
             update_manifest(manifest_path, {"component_integrity": component_integrity})
@@ -1321,6 +1401,8 @@ def main() -> int:
                 "config_fingerprint": fingerprint,
                 "component_set": selected_component_set,
                 "run_manifest": str(manifest_path) if manifest_path else None,
+                "anchor_sheet_path": str(Path(manifest_path).with_name("anchors.json")) if manifest_path else None,
+                "anchor_summary": anchor_summary(anchor_sheet),
                 "queued_at_utc": started_at.isoformat(),
             }
             if args.json:
@@ -1343,6 +1425,7 @@ def main() -> int:
                 expected_fps=None,
                 require_audio=resolved_audio_policy == "require",
                 dynamic_check=args.dynamic_check,
+                anchor_check=args.anchor_check,
                 compact=True,
                 verbose=False,
                 watch=False,
@@ -1374,6 +1457,8 @@ def main() -> int:
                 "audio_policy": resolved_audio_policy,
                 "config_fingerprint": fingerprint,
                 "run_manifest": str(manifest_path) if manifest_path else None,
+                "anchor_sheet_path": str(Path(manifest_path).with_name("anchors.json")) if manifest_path else None,
+                "anchor_summary": anchor_summary(anchor_sheet),
                 "watch": True,
                 "status": compact_result(status_result),
             }
@@ -1383,6 +1468,7 @@ def main() -> int:
                     "state": status_result.get("state", "verification_failed"),
                     "elapsed_seconds": status_result.get("elapsed_seconds"),
                     "outputs": status_result.get("outputs", []),
+                    "anchor_qa": status_result.get("anchor_qa", []),
                     "completed_at_utc": datetime.now(timezone.utc).isoformat(),
                 },
             )

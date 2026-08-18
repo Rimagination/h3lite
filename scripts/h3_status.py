@@ -181,6 +181,123 @@ def dynamic_video_quality(path: Path, duration: float | None) -> dict[str, objec
     return result
 
 
+def _frame_similarity(first: bytes | None, second: bytes | None) -> float | None:
+    if not first or not second:
+        return None
+    size = min(len(first), len(second))
+    if size <= 0:
+        return None
+    difference = sum(abs(first[index] - second[index]) for index in range(size)) / size
+    return round(max(0.0, min(1.0, 1.0 - difference / 255.0)), 3)
+
+
+def _similarity_band(value: float | None) -> str:
+    if value is None:
+        return "unavailable"
+    if value >= 0.80:
+        return "high"
+    if value >= 0.50:
+        return "medium"
+    return "low"
+
+
+def _load_anchor_sheet(manifest: dict[str, object], manifest_path: Path | None) -> dict[str, object]:
+    path_value = manifest.get("anchor_sheet_path")
+    if path_value:
+        path = Path(str(path_value)).expanduser()
+        if not path.is_absolute() and manifest_path is not None:
+            path = manifest_path.parent / path
+        try:
+            value = json.loads(path.read_text(encoding="utf-8"))
+            if isinstance(value, dict):
+                return value
+        except (OSError, json.JSONDecodeError):
+            pass
+    value = manifest.get("anchor_sheet")
+    return value if isinstance(value, dict) else {}
+
+
+def _reference_path(reference: dict[str, object], comfyui: Path | None) -> Path | None:
+    source = reference.get("source")
+    if not source and isinstance(reference.get("staged"), (str, Path)):
+        source = reference.get("staged")
+    if source:
+        path = Path(str(source)).expanduser()
+        if path.exists():
+            return path
+    input_name = reference.get("input_name")
+    if comfyui is not None and input_name:
+        candidate = comfyui / "input" / str(input_name)
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def anchor_consistency_quality(
+    path: Path,
+    duration: float | None,
+    anchor_sheet: dict[str, object],
+    comfyui: Path | None = None,
+) -> dict[str, object]:
+    """Run an advisory temporal/reference image check; never acts as face recognition."""
+    if not anchor_sheet:
+        return {"classification": "not_requested"}
+    identity_sensitive = bool(anchor_sheet.get("identity_sensitive"))
+    multi_shot = bool(anchor_sheet.get("multi_shot"))
+    references = anchor_sheet.get("references")
+    references = references if isinstance(references, list) else []
+    if not identity_sensitive and not multi_shot and not references:
+        return {"classification": "not_requested"}
+    if duration is None or duration <= 0:
+        return {"classification": "unavailable", "error": "video duration is unavailable"}
+    first_timestamp = 0.0
+    last_timestamp = max(0.01, duration - 0.05)
+    middle_timestamp = max(0.01, duration / 2)
+    samples = {
+        "video_first": extract_gray_frame(path, first_timestamp),
+        "video_middle": extract_gray_frame(path, middle_timestamp),
+        "video_last": extract_gray_frame(path, last_timestamp),
+    }
+    temporal = {
+        "first_to_middle": _frame_similarity(samples["video_first"], samples["video_middle"]),
+        "middle_to_last": _frame_similarity(samples["video_middle"], samples["video_last"]),
+        "first_to_last": _frame_similarity(samples["video_first"], samples["video_last"]),
+    }
+    report: dict[str, object] = {
+        "classification": "advisory_anchor_check",
+        "acceptance": "manual_review" if identity_sensitive or multi_shot else "advisory",
+        "identity_sensitive": identity_sensitive,
+        "multi_shot": multi_shot,
+        "temporal_similarity": temporal,
+        "temporal_bands": {key: _similarity_band(value) for key, value in temporal.items()},
+        "reference_comparisons": [],
+        "note": "Pixel similarity is a continuity signal, not face recognition; review identity, wardrobe, markings, and composition manually.",
+    }
+    comparisons: list[dict[str, object]] = []
+    for reference in references:
+        if not isinstance(reference, dict):
+            continue
+        role = str(reference.get("role", "reference"))
+        reference_path = _reference_path(reference, comfyui)
+        if reference_path is None:
+            comparisons.append({"role": role, "path": None, "similarity": None, "band": "unavailable"})
+            continue
+        reference_frame = extract_gray_frame(reference_path, 0.0)
+        video_frame = samples["video_first" if role == "first_frame" else "video_last"]
+        similarity = _frame_similarity(reference_frame, video_frame)
+        comparisons.append(
+            {
+                "role": role,
+                "path": str(reference_path),
+                "similarity": similarity,
+                "band": _similarity_band(similarity),
+            }
+        )
+    report["reference_comparisons"] = comparisons
+    report["sample_count"] = sum(sample is not None for sample in samples.values())
+    return report
+
+
 def compact_result(result: dict[str, object]) -> dict[str, object]:
     """Remove ComfyUI's large history graph from normal agent-facing output."""
     state = str(result.get("state", "unknown"))
@@ -220,6 +337,7 @@ def compact_result(result: dict[str, object]) -> dict[str, object]:
                         "verified",
                         "verification_error",
                         "dynamic_qa",
+                        "anchor_qa",
                     )
                     if key in item
                 }
@@ -241,6 +359,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--expected-fps", type=float, help="expected video FPS")
     parser.add_argument("--require-audio", action="store_true", help="fail verification when the MP4 has no audio stream")
     parser.add_argument("--dynamic-check", action="store_true", help="sample first/middle/last frames and reject static or black output")
+    parser.add_argument("--anchor-check", dest="anchor_check", action="store_true", default=True, help="record advisory reference/continuity anchor QA")
+    parser.add_argument("--skip-anchor-check", dest="anchor_check", action="store_false", help="skip advisory anchor QA")
     parser.add_argument("--compact", action="store_true", help="use the default compact result format")
     parser.add_argument("--verbose", action="store_true", help="include the full ComfyUI history graph in output")
     parser.add_argument("--watch", action="store_true", help="poll until the prompt completes")
@@ -271,6 +391,7 @@ def status_once(args: argparse.Namespace) -> dict[str, object]:
     expected_frames = args.expected_frames if args.expected_frames is not None else settings.get("length")
     expected_fps = args.expected_fps if args.expected_fps is not None else settings.get("fps")
     require_audio = args.require_audio or manifest.get("audio_policy") == "require"
+    anchor_sheet = _load_anchor_sheet(manifest, manifest_path)
     history = json_request(args.base_url, f"/history/{args.prompt_id}")
     record = history_record(history, args.prompt_id)
     if record is None:
@@ -298,6 +419,20 @@ def status_once(args: argparse.Namespace) -> dict[str, object]:
                         qa = dynamic_video_quality(Path(str(item["path"])), float(item["duration_seconds"]))
                         item["dynamic_qa"] = qa
                         item["verified"] = bool(item.get("verified") and qa.get("classification") == "dynamic")
+            anchor_reports: list[dict[str, object]] = []
+            anchor_check = getattr(args, "anchor_check", True)
+            if anchor_check and anchor_sheet:
+                for item in outputs:
+                    if not item.get("has_video") or item.get("duration_seconds") is None:
+                        continue
+                    qa = anchor_consistency_quality(
+                        Path(str(item["path"])),
+                        float(item["duration_seconds"]),
+                        anchor_sheet,
+                        comfyui,
+                    )
+                    item["anchor_qa"] = qa
+                    anchor_reports.append({"path": item.get("path"), **qa})
             outputs_ok = bool(outputs) and all(item.get("verified") is True for item in outputs)
             state = "success" if outputs_ok else "verification_failed"
             elapsed_seconds = execution_elapsed_seconds(record)
@@ -313,10 +448,20 @@ def status_once(args: argparse.Namespace) -> dict[str, object]:
                 "audio_policy": manifest.get("audio_policy", "require" if require_audio else "allow"),
                 "require_audio": require_audio,
                 "dynamic_check": args.dynamic_check,
+                "anchor_check": anchor_check,
+                "anchor_qa": anchor_reports,
                 "outputs": outputs,
                 "history": record,
             }
-            update_manifest(manifest_path, {"state": state, "elapsed_seconds": elapsed_seconds, "outputs": outputs})
+            update_manifest(
+                manifest_path,
+                {
+                    "state": state,
+                    "elapsed_seconds": elapsed_seconds,
+                    "outputs": outputs,
+                    "anchor_qa": anchor_reports,
+                },
+            )
             if outputs_ok:
                 record_timing_sample(run_root, manifest_path, elapsed_seconds)
         else:

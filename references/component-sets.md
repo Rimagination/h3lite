@@ -15,6 +15,12 @@ files, the matching custom nodes, workflows, and a component manifest. Do not
 mix the two packages. If a user cannot use Baidu Netdisk, fall back to the
 upstream sources below while preserving the exact filenames, sizes, and hashes.
 
+The bundled multi-image Ref2VA graphs reuse the selected set's W4A8 diffusion,
+4B text encoder, ClipProj, dual VAEs, and Turbo LoRA. Ref2VA therefore has no
+separate checkpoint download; verify that the native
+`MiniMaxH3ReferenceToVideo` node and the resident ClipProj image path are
+available before adding new files.
+
 Treat each row as a versioned set. Do not freely mix a diffusion checkpoint,
 text encoder, Turbo LoRA, node revision, and workflow merely because each file
 loads independently. A set is validated only after it produces coherent moving

@@ -172,5 +172,15 @@ class MonitorLogicTests(unittest.TestCase):
         self.assertIn("--topmost", command)
 
 
+    def test_monitor_defaults_to_windows_and_supports_explicit_override(self):
+        from h3_fastpath import resolve_monitor_gui
+
+        self.assertTrue(resolve_monitor_gui(None, platform="win32"))
+        self.assertFalse(resolve_monitor_gui(None, platform="linux"))
+        self.assertFalse(resolve_monitor_gui(False, platform="win32"))
+        self.assertTrue(resolve_monitor_gui(True, platform="linux"))
+
+
+
 if __name__ == "__main__":
     unittest.main()

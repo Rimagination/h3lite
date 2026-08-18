@@ -42,6 +42,7 @@ REFERENCE_MODE_LABELS = {
     "i2va": "I2VA",
     "fl2va": "FL2VA",
     "l2va": "L2VA",
+    "ref2va": "Ref2VA",
 }
 
 
@@ -109,6 +110,7 @@ def build_status_command(
     watch_timeout: float = DEFAULT_WATCH_TIMEOUT,
     require_audio: bool = True,
     dynamic_check: bool = True,
+    anchor_check: bool = True,
 ) -> list[str]:
     """Build the one and only foreground monitor command for a run."""
     command = [
@@ -136,6 +138,10 @@ def build_status_command(
         command.append("--require-audio")
     if dynamic_check:
         command.append("--dynamic-check")
+    if anchor_check:
+        command.append("--anchor-check")
+    else:
+        command.append("--skip-anchor-check")
     return command
 
 
@@ -159,10 +165,13 @@ def build_generate_command(
     watch_interval: float = DEFAULT_WATCH_INTERVAL,
     watch_timeout: float = DEFAULT_WATCH_TIMEOUT,
     dynamic_check: bool = True,
+    anchor_check: bool = True,
     workflow_template: str = "h3_w4a8_t2v",
     component_set: str = "auto",
     first_frame: str | Path | None = None,
     last_frame: str | Path | None = None,
+    reference_images: Sequence[str | Path] | None = None,
+    anchor_file: str | Path | None = None,
 ) -> list[str]:
     """Build one end-to-end generate-and-watch command."""
     command = [
@@ -210,12 +219,20 @@ def build_generate_command(
         command.extend(["--first-frame", str(first_frame)])
     if last_frame is not None:
         command.extend(["--last-frame", str(last_frame)])
+    for reference_image in reference_images or []:
+        command.extend(["--ref-image", str(reference_image)])
+    if anchor_file is not None:
+        command.extend(["--anchor-file", str(anchor_file)])
     if allow_duplicate:
         command.append("--allow-duplicate")
     if dynamic_check:
         command.append("--dynamic-check")
     else:
         command.append("--skip-dynamic-check")
+    if anchor_check:
+        command.append("--anchor-check")
+    else:
+        command.append("--skip-anchor-check")
     return command
 
 
@@ -393,7 +410,16 @@ def resolve_reference_mode(args: argparse.Namespace) -> str:
     """Resolve an explicit or inferred H3 reference route."""
     has_first = bool(getattr(args, "first_frame", None))
     has_last = bool(getattr(args, "last_frame", None))
-    inferred = "fl2va" if has_first and has_last else "i2va" if has_first else "l2va" if has_last else "t2v"
+    reference_images = list(getattr(args, "reference_images", None) or getattr(args, "ref_image", None) or [])
+    if reference_images and (has_first or has_last):
+        raise FastPathError("--ref-image cannot be combined with --first-frame or --last-frame")
+    inferred = (
+        "ref2va" if reference_images
+        else "fl2va" if has_first and has_last
+        else "i2va" if has_first
+        else "l2va" if has_last
+        else "t2v"
+    )
     requested_mode = getattr(args, "mode", "auto")
     mode = requested_mode if requested_mode != "auto" else inferred
     requirements = {
@@ -401,7 +427,12 @@ def resolve_reference_mode(args: argparse.Namespace) -> str:
         "i2va": (True, False),
         "fl2va": (True, True),
         "l2va": (False, True),
+        "ref2va": (False, False),
     }
+    if mode not in requirements:
+        raise FastPathError(f"unsupported reference mode: {mode}")
+    if mode == "ref2va" and not reference_images:
+        raise FastPathError("--mode ref2va requires at least one --ref-image")
     required = requirements[mode]
     if (has_first, has_last) != required:
         expected = {
@@ -409,6 +440,7 @@ def resolve_reference_mode(args: argparse.Namespace) -> str:
             "i2va": "--first-frame only",
             "fl2va": "both --first-frame and --last-frame",
             "l2va": "--last-frame only",
+            "ref2va": "at least one --ref-image and no frame images",
         }[mode]
         raise FastPathError(f"--mode {mode} requires {expected}")
     return mode
@@ -476,8 +508,13 @@ def select_workflow_template(
 ) -> str:
     """Select a route from reference mode, component set, and loaded node classes."""
     wants_reference = reference_mode != "t2v"
+    wants_ref2va = reference_mode == "ref2va"
     if requested != "auto":
-        template_is_reference = requested.startswith("h3_w4a8_i2v")
+        template_is_ref2va = requested.startswith("h3_w4a8_ref2va")
+        template_is_reference = requested.startswith("h3_w4a8_i2v") or template_is_ref2va
+        if template_is_ref2va != wants_ref2va:
+            expected = "a Ref2VA template" if wants_ref2va else "a non-Ref2VA template"
+            raise FastPathError(f"workflow template {requested} is incompatible with {reference_mode.upper()}; choose {expected}")
         if template_is_reference != wants_reference:
             expected = "an I2V template" if wants_reference else "a T2V template"
             raise FastPathError(f"workflow template {requested} is incompatible with {reference_mode.upper()}; choose {expected}")
@@ -503,13 +540,22 @@ def select_workflow_template(
             raise FastPathError(str(exc)) from exc
         if acceleration == "auto" and COMPONENT_SET_ACCELERATION_POLICY.get(normalized_set) == "compat":
             accelerated = False
+    if wants_ref2va:
+        return "h3_w4a8_ref2va" if accelerated else "h3_w4a8_ref2va_compat"
     if wants_reference:
         return "h3_w4a8_i2v" if accelerated else "h3_w4a8_i2v_compat"
     return "h3_w4a8_t2v" if accelerated else "h3_w4a8_t2v_compat"
 
 
+def resolve_monitor_gui(value: bool | None, *, platform: str | None = None) -> bool:
+    """Enable the native monitor by default on Windows desktop runs."""
+    if value is not None:
+        return bool(value)
+    return (platform or sys.platform).startswith("win")
+
+
 def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
-    monitor_gui = bool(getattr(args, "monitor_gui", False))
+    monitor_gui = resolve_monitor_gui(getattr(args, "monitor_gui", None))
     reference_mode = resolve_reference_mode(args)
     reference_mode_label = REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper())
     comfyui = normalize_windows_path(args.comfyui).resolve()
@@ -589,6 +635,16 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         plan["request"]["reference_mode"] = reference_mode_label
     if isinstance(plan.get("decision"), dict):
         plan["decision"]["reference_mode"] = reference_mode_label
+
+    workflow_template = select_workflow_template(
+        args.workflow_template,
+        routing_doctor,
+        reference_mode,
+        component_set=selected_component_set,
+        acceleration=getattr(args, "acceleration", "auto"),
+    )
+    if isinstance(plan.get("decision"), dict):
+        plan["decision"]["workflow_template"] = workflow_template
     _write_json(plan_path, plan)
 
     from h3_preflight import assess_runtime_risk, refresh_runtime
@@ -604,13 +660,6 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
     resolution_text = f"{int(resolution['width'])}x{int(resolution['height'])}"
     profile = str(decision["mode"])
     filename_prefix = args.filename_prefix or "video/H3Lite_fastpath"
-    workflow_template = select_workflow_template(
-        args.workflow_template,
-        routing_doctor,
-        reference_mode,
-        component_set=selected_component_set,
-        acceleration=getattr(args, "acceleration", "auto"),
-    )
     generation_command = build_generate_command(
         base_url=args.base_url,
         prompt_file=prompt_file,
@@ -629,10 +678,13 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         watch_interval=args.watch_interval,
         watch_timeout=args.watch_timeout,
         dynamic_check=args.dynamic_check,
+        anchor_check=getattr(args, "anchor_check", True),
         workflow_template=workflow_template,
         component_set=selected_component_set,
         first_frame=getattr(args, "first_frame", None),
         last_frame=getattr(args, "last_frame", None),
+        reference_images=getattr(args, "reference_images", None) or getattr(args, "ref_image", None),
+        anchor_file=getattr(args, "anchor_file", None),
     )
 
     if args.dry_run:
@@ -730,9 +782,17 @@ def parse_args() -> argparse.Namespace:
         default="auto",
         help="optional acceleration policy; auto uses each component set's validated graph",
     )
-    parser.add_argument("--mode", choices=["auto", "t2v", "i2va", "fl2va", "l2va"], default="auto", help="reference route; inferred from frame arguments when omitted")
+    parser.add_argument("--mode", choices=["auto", "t2v", "i2va", "fl2va", "l2va", "ref2va"], default="auto", help="reference route; inferred from frame/reference arguments when omitted")
     parser.add_argument("--first-frame", help="local first-frame image for I2VA/FL2VA")
     parser.add_argument("--last-frame", help="local last-frame image for L2VA/FL2VA")
+    parser.add_argument(
+        "--ref-image",
+        dest="reference_images",
+        action="append",
+        default=[],
+        help="reference image for Ref2VA; repeat for Picture 1, Picture 2, ...",
+    )
+    parser.add_argument("--anchor-file", help="optional JSON declaration of identity/continuity anchors")
     parser.add_argument("--target-minutes", type=float)
     parser.add_argument("--aspect", default="landscape")
     parser.add_argument("--video-seconds", type=float, default=5.0)
@@ -746,13 +806,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-doctor", action="store_true", help="invalidate the cached environment report")
     parser.add_argument("--watch-interval", type=float, default=DEFAULT_WATCH_INTERVAL)
     parser.add_argument("--watch-timeout", type=float, default=DEFAULT_WATCH_TIMEOUT)
-    parser.add_argument(
+    monitor_group = parser.add_mutually_exclusive_group()
+    monitor_group.add_argument(
         "--monitor-gui",
+        dest="monitor_gui",
         action="store_true",
-        help="open a native Windows progress window while the run is queued or running",
+        help="force the native progress window on",
     )
+    monitor_group.add_argument(
+        "--no-monitor-gui",
+        dest="monitor_gui",
+        action="store_false",
+        help="disable the native progress window for this run",
+    )
+    parser.set_defaults(monitor_gui=None)
     parser.add_argument("--dynamic-check", dest="dynamic_check", action="store_true", default=True)
     parser.add_argument("--skip-dynamic-check", dest="dynamic_check", action="store_false")
+    parser.add_argument("--anchor-check", dest="anchor_check", action="store_true", default=True)
+    parser.add_argument("--skip-anchor-check", dest="anchor_check", action="store_false")
     parser.add_argument("--allow-duplicate", action="store_true")
     parser.add_argument("--dry-run", action="store_true", help="run checks and show the queue command without submitting")
     parser.add_argument("--json", action="store_true", help="print a machine-readable result")

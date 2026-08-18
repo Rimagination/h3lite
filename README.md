@@ -31,6 +31,25 @@ H3 Lite 主要面向 Windows 低显存 NVIDIA 显卡。默认使用经过剪枝�
 
 Mac 用户不会被引导安装 CUDA 或 Windows 虚拟环境。若明确选择 Mac 社区路线，可参考[社区权重包](https://huggingface.co/yunfengwang/mmh3turbo-bundles)和 `uvx mmh3turbo`；其权重、许可证、更新和性能数据独立于 H3 Lite，不能与 ComfyUI 模型混用。
 
+## 从需求到成片：四步工作流
+
+复杂视频先按“**意图路由 → 参考图锚点 → 提示词增强 → 生成与验收**”处理。这个工作流借鉴了公开 Agent Skill 的组织方式，但 H3 Lite 仍然只使用本地 ComfyUI，不调用 Higgsfield、MCP 或云端模型。
+
+| 你的目标 | 优先路线 | 关键做法 |
+|---|---|---|
+| 纯文字描述完整视频 | `T2VA` | 先写开场状态，再按时间顺序写动作、镜头和声音。 |
+| 指定视频第一帧 | `I2VA` | 把参考图锁定在 `0.00s`，只描述后续变化。 |
+| 指定首尾画面 | `FL2VA` | 描述两个锚点之间连续、可见的变化。 |
+| 多张图/视频/音频参考 | `Ref2VA` | 先定义每份素材的角色、保留项和可变项，再写分镜。 |
+
+人物或多镜头任务会先建立“锚点卡”：角色、服装、发型/花纹、道具、场景、光线、必须保持的内容、允许变化的内容，以及禁止漂移的内容。每个参考素材使用稳定名称（如 `Subject A`、`Picture 1`），并在提示词、输出文件夹和运行记录中保持一致。若 Ref2VA 的模型、文本编码器或工作流没有实际安装，Agent 不会把“有节点”当成“路线可用”，而是回退到分镜化 I2VA 或明确标记实验路线。
+
+运行时会把这张锚点卡保存为每次任务目录中的 `anchors.json`，并在 `manifest.json` 记录其路径和摘要。生成完成后，`h3_status.py` 会在存在参考图或多镜头锚点时记录 `anchor_qa`：比较首/中/尾帧与参考图的像素连续性，并标记需要人工复核的身份、服饰和构图一致性。它是提示漂移的早期信号，不是人脸识别，也不会因为像素相似度偏低而代替人工判断或自动否定已通过的媒体技术验收。
+
+提示词内部按五遍增强：意图一句话 → 可观察的角色/场景锁定 → 按播放顺序的动作与分镜 → 物理运镜和声音 → 少量防漂移约束。最终仍转换为 H3 所需的 `integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music` 字段；不要求用户自己填写 schema，也不会用堆砌“电影感”形容词代替具体动作。
+
+当描述比较模糊（例如“更电影感”“做一个好看的 3D 动画”）时，Agent 可选读取 [`references/prompt-assist.md`](references/prompt-assist.md)，参考 Higgsfield 公开模板把需求拆成稳定的风格/角色锁定、`SCENE`、`MOTION`、`AUDIO` 和少量 `NEGATIVE` 约束，再翻译回 H3 字段。它只是提示词写作辅助，不调用 Higgsfield，不复制其模型参数，也不会改变本地 Windows 低显存路线；如果联网不可用，就使用本地 H3 提示词参考继续工作。
+
 ## 你能用它做什么
 
 | 路线 | 输入 | 适合场景 |
@@ -39,9 +58,9 @@ Mac 用户不会被引导安装 CUDA 或 Windows 虚拟环境。若明确选择 
 | I2VA | 首帧图片 + 文字提示 | 从指定画面开始生成 |
 | FL2VA | 首帧 + 尾帧图片 + 文字提示 | 约束视频起点和终点 |
 | L2VA | 尾帧图片 + 文字提示 | 让视频收束到指定画面 |
-| Ref2VA | 图片、视频或音频参考 | 复用人物、风格、动作、镜头或声音 |
+| Ref2VA | 多张图片、视频或音频参考 | 复用人物、风格、动作、镜头或声音；当前 fastpath 先提供实验性多图工作流 |
 
-T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动选择。Ref2VA 需要匹配的参考工作流，并且必须确认对应模型和节点已经安装。
+T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动选择。当前 fastpath 也支持重复 `--ref-image` 自动选择实验性的 Ref2VA 工作流；实际运行前仍必须确认 `MiniMaxH3ReferenceToVideo`、匹配的 ClipProj/文本编码器和工作流已经加载。
 
 ## 快速开始
 
@@ -119,6 +138,8 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 
 下载一个完整方案即可。将包内 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，导入工作流 JSON，并保留 `component-manifest.json`。百度网盘不可用时，按 [`references/component-sets.md`](references/component-sets.md) 的文件名、大小和哈希从上游来源下载。
 
+**Ref2VA 不需要单独的模型包。** bundled 多图 Ref2VA 工作流复用所选组件集中的 W4A8 扩散模型、4B 文本编码器、ClipProj、双 VAE 和 Turbo LoRA；只新增工作流入口和参考图绑定。若这些组件已经存在，Agent 应先复用并检查原生 `MiniMaxH3ReferenceToVideo` 节点，不要重复下载所谓的“Ref2VA checkpoint”。
+
 ### 手动安装 Skill
 
 打开仓库页面，选择 **Code → Download ZIP**。解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
@@ -144,6 +165,10 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 3. **声音**：环境声、动作声、音乐或对白。
 
 “不要对白”只表示不说话；只有明确要求“完全静音”时才关闭音频。中文提示词不要只写一个很短的名词，建议补充主体特征、环境、景别、光线和动作，先以约 30–50 个汉字作为起点，再用低分辨率预览检查。
+
+### 模糊需求的提示词辅助
+
+如果用户只给出风格词或一句松散想法，先补齐“观众最终要看到什么”，再确定一个可观察动作和一个主要运镜。例如“两个男生在海边，真实、电影感、镜头绕过去”可以明确为：两位人物的正/三分之四朝向、服饰和海岸线保持不变，镜头在平视高度缓慢顺时针环绕约 20°，保留海浪与风声，不凭空添加对白。参考网站的结构是为了减少歧义，不是让提示词堆更多形容词；完整模板和边界见 [`references/prompt-assist.md`](references/prompt-assist.md)。
 
 ### 分段提示：金毛幼犬醒来
 
@@ -183,16 +208,37 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 
 对于多镜头任务，先用最小可用画布跑完整分镜，再提升目标分辨率。长任务保留每个镜头的完整日志，并在磁盘或 pagefile 不足时提前停止；不要把被 `grep` 过滤掉的输出当作成功。
 
+### Ref2VA：多张图片参考
+
+把图片按提示词中的顺序重复附加为 `Picture 1`、`Picture 2`、`Picture 3`。建议一张主图负责人物身份，其余图片分别负责场景、服装/道具或姿势；不要让每张图片都要求“完整复制”。对应的命令形式是：
+
+```powershell
+python scripts/h3_fastpath.py `
+  --comfyui F:\MiniMax-H3\ComfyUI `
+  --prompt-file prompts/ref2va.txt `
+  --ref-image identity.png `
+  --ref-image scene.png `
+  --ref-image wardrobe.png `
+  --mode ref2va `
+  --resolution 640x352 `
+  --profile fast `
+  --json
+```
+
+当前 Ref2VA 模板要求 ClipProj 编码器使用 `resident` 模式。它比 I2VA 更占显存，8 GB 显卡可能需要先用一张参考图或直接由 preflight 阻止；通过后再逐步增加参考图数量。完整的六段式提示词和角色分配见 [`references/prompt-writing.md`](references/prompt-writing.md) 与 [`references/agent-workflow.md`](references/agent-workflow.md)。
+
+底层 `MiniMaxH3ReferenceToVideo` 节点还支持参考视频和音频；本次 bundled fastpath 先把最稳定、最容易验收的多图入口做成 `--ref-image`，视频/音频素材仍可通过原生工作流接入。
+
 ## 不打开网页也能看进度
 
-Windows 交互式运行时，在 fastpath 命令后加上 `--monitor-gui`，H3 Lite 会弹出一个原生进度窗口：
+Windows 上运行 fastpath 时，H3 Lite 默认会弹出一个原生进度窗口：
 
 - 显示排队、采样、解码、写入视频等阶段；
 - 直接读取 ComfyUI 原生 WebSocket 的步骤和节点进度；
 - 同时显示已用时间、预计剩余时间、显存、内存和 pagefile；
 - 生成完成后显示视频路径，可直接打开输出文件夹。
 
-新版 ComfyUI 会通过 `progress_state` 提供工作流节点状态，窗口会显示已完成节点、当前节点步骤和当前节点监测时长；轨道也按节点分段。默认窗口为 `760×620`，内容区带垂直滚动条，较小屏幕也能看到全部按钮。节点完成度是工作流结构进度，不等于耗时百分比；预计剩余时间使用经验耗时估计。没有可量化事件时，进度条保持静态并显示等待原因，不用动画伪装进展。这个本地窗口直接连接 ComfyUI，不需要浏览器或 MCP 中转。
+新版 ComfyUI 会通过 `progress_state` 提供工作流节点状态，窗口会显示已完成节点、当前节点步骤和当前节点监测时长；轨道也按节点分段。默认窗口为 `760×620`，内容区带垂直滚动条，较小屏幕也能看到全部按钮。节点完成度是工作流结构进度，不等于耗时百分比；预计剩余时间使用经验耗时估计。没有可量化事件时，进度条保持静态并显示等待原因，不用动画伪装进展。这个本地窗口直接连接 ComfyUI，不需要浏览器或 MCP 中转。需要终端-only 运行时，加上 `--no-monitor-gui`。
 
 它不需要打开浏览器，关闭窗口也不会中断生成。也可以独立打开窗口，让它自动寻找当前新任务：
 
@@ -214,6 +260,9 @@ H3 Lite 把扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、�
 - [MiniMax H3 ComfyUI 教程](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)
 - [MiniMax-H3 官方仓库](https://github.com/MiniMax-AI/MiniMax-H3)
 - [H3 prompt-writing skill](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing)
+- [Agent 工作流参考：路由、锚点、提示词增强与验收](references/agent-workflow.md)
+- [Higgsfield 公开 Agent Skills（仅作设计参考，不是运行依赖）](https://github.com/higgsfield-ai/skills)
+- [Higgsfield 提示词模板与生成器（仅作模糊需求的写作辅助）](references/prompt-assist.md)
 - [社区 Mac/Metal MLX 移植实录（参考，不代表 H3 Lite 已支持）](https://zhuanlan.zhihu.com/p/2069479566171812707)
 - [社区 Apple Silicon 本地部署排错实录（参考，不代表 Windows 资源来源）](https://mp.weixin.qq.com/s/hN60KLN7Pkpqb0pbk-r4WQ)
 - [完整组件集与校验值](references/component-sets.md)

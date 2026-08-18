@@ -55,6 +55,25 @@ This is not a pure GPU benchmark. The RTX 4060 Ti 16 GB can keep more weights re
 
 Start with the highest-success `fast` route: four steps, native audio, a short clip, and a smaller canvas. Increase resolution, duration, or steps only after the baseline succeeds.
 
+## From brief to verified clip
+
+For complex requests, H3 Lite follows a four-stage contract: **intent route → reference/identity anchors → prompt enhancement → generation and verification**. This organization is informed by public agent-skill designs, but H3 Lite remains a local ComfyUI workflow; it does not call Higgsfield, MCP, or cloud models.
+
+| Goal or input | Preferred route | Key decision |
+|---|---|---|
+| Text describes the whole clip | `T2VA` | Establish the opening state, then write the audiovisual timeline. |
+| A specific opening image is supplied | `I2VA` | Anchor it at `0.00s` and describe forward motion only. |
+| Both endpoints are supplied | `FL2VA` | Describe a physically continuous path between the anchors. |
+| Several image/video/audio references are supplied | `Ref2VA` | Define each reference role, retention, allowed change, and forbidden drift first. |
+
+For characters or multi-shot work, the agent builds a compact anchor sheet: stable subject and picture labels, wardrobe and prop locks, scene/light locks, permitted changes, and anti-drift constraints. The same labels are reused in the prompt, output prefix, and run manifest. If the Ref2VA checkpoint, text encoder, or workflow is not actually installed, the agent falls back to shot-based I2VA or clearly marks the route as experimental.
+
+At runtime this sheet is written to `anchors.json` inside the task run directory, while `manifest.json` stores its path and summary. When references or multi-shot anchors exist, `h3_status.py` records advisory `anchor_qa` data by comparing first/middle/last frames with the bound images. This is an early drift signal—not face recognition—and it never replaces manual review of identity, wardrobe, markings, or composition.
+
+Prompt enhancement happens in five passes: one-sentence intent → observable identity and scene locks → ordered actions and shots → physical camera and sound → only the few exclusions that prevent a concrete failure. The final text is translated into H3's required fields; users do not need to write the schema themselves.
+
+When a brief is vague (for example, “make it more cinematic” or “a nice 3D animation”), the agent may read [`references/prompt-assist.md`](references/prompt-assist.md) and use Higgsfield's public prompt organization—stable style/identity locks, `SCENE`, `MOTION`, `AUDIO`, and a short `NEGATIVE` clause—as a writing scaffold. It is only an optional aid: H3 Lite does not call Higgsfield, copy its model parameters, or change the local Windows low-VRAM route. If browsing is unavailable, the agent falls back to the local H3 references.
+
 ## Quick validation: bouncing red ball
 
 After installation, use a simple five-second action with clear sound to verify the full pipeline:
@@ -76,6 +95,10 @@ Organize a short-video prompt into three parts:
 3. **Sound**: ambience, physical sound, music, or dialogue.
 
 “No dialogue” only removes speech; rain, footsteps, impacts, and ambience remain. Audio is disabled only when you explicitly request complete silence.
+
+### Optional assist for vague briefs
+
+When a user gives only a style adjective or a loose idea, first define what the audience must see by the end, then choose one observable action and one primary camera move. For example, “two men by the sea, realistic and cinematic, camera slowly circles” becomes an explicit front/three-quarter orientation, stable wardrobe and coastline, a slow eye-level 20-degree clockwise arc, and ocean/wind ambience without invented dialogue. The public website's structure is used to remove ambiguity, not to add adjectives; see [`references/prompt-assist.md`](references/prompt-assist.md) for the full template and boundaries.
 
 ### Timeline prompt: golden retriever wakes up
 
@@ -121,6 +144,36 @@ Use H3 Lite to generate a 5-second video from the reference video and male voice
 
 The ideas and Ref2VA assets come from MiniMax H3's official reproducible cases. Asset provenance and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json).
 
+### Ref2VA: multiple image references
+
+Repeat `--ref-image` in the same order used by the prompt's `Picture 1`,
+`Picture 2`, and `Picture 3` labels. A practical arrangement is one master
+identity image plus separate scene, wardrobe/prop, or pose references. Do not
+ask every image to be copied in full:
+
+```powershell
+python scripts/h3_fastpath.py `
+  --comfyui F:\MiniMax-H3\ComfyUI `
+  --prompt-file prompts/ref2va.txt `
+  --ref-image identity.png `
+  --ref-image scene.png `
+  --ref-image wardrobe.png `
+  --mode ref2va `
+  --resolution 640x352 `
+  --profile fast `
+  --json
+```
+
+The bundled Ref2VA graph keeps the ClipProj encoder resident because the
+installed image-reference path is not reliable in dynamic mode with the int8
+encoder. This can use more VRAM than I2VA; on an 8 GB GPU, start with one
+reference image and let preflight decide whether more are safe.
+
+The native `MiniMaxH3ReferenceToVideo` node also accepts reference video and
+audio. The bundled fastpath exposes the more predictable, easier-to-verify
+multi-image path first; video/audio references remain available through a
+native ComfyUI workflow.
+
 ## Supported inputs
 
 | Route | Input | Best for |
@@ -129,9 +182,9 @@ The ideas and Ref2VA assets come from MiniMax H3's official reproducible cases. 
 | I2VA | First-frame image + text | Starting from a specified image |
 | FL2VA | First and last images + text | Constraining both ends of a clip |
 | L2VA | Last-frame image + text | Ending on a specified image |
-| Ref2VA | Reference image, video, or audio | Reusing identity, style, motion, camera, or voice |
+| Ref2VA | Multiple reference images, video, or audio | Reusing identity, style, motion, camera, or voice; experimental local multi-image graph |
 
-Fastpath selects T2VA, I2VA, FL2VA, or L2VA from supplied first/last-frame arguments. Ref2VA uses a workflow matched to the reference assets.
+Fastpath selects T2VA, I2VA, FL2VA, or L2VA from supplied first/last-frame arguments, and can select the experimental Ref2VA graph when `--ref-image` is repeated. Ref2VA still requires the matching native node, ClipProj/text encoder, and workflow to be loaded.
 
 ## Installation target and component downloads
 
@@ -156,13 +209,20 @@ Do not mix Set A and Set B. The Baidu Netdisk packages contain the matching mode
 
 Download one complete set. Merge its `models` and `custom_nodes` folders into `<ComfyUI>`, import the JSON files from `workflows`, and keep `component-manifest.json`. If Baidu Netdisk is unavailable, use the exact filenames, sizes, and hashes in [`references/component-sets.md`](references/component-sets.md) when downloading from upstream sources.
 
+**Ref2VA does not require a separate model package.** The bundled multi-image
+Ref2VA graphs reuse the selected set's W4A8 diffusion model, 4B text encoder,
+ClipProj, dual VAEs, and Turbo LoRA; they add a workflow entry and reference
+image binding. If those roles are already present, reuse and verify the native
+`MiniMaxH3ReferenceToVideo` node instead of downloading a second “Ref2VA
+checkpoint.”
+
 ### Manual skill installation
 
 Without agent installation, open the repository page and choose **Code → Download ZIP**. Extract it, place the `h3lite` folder in the Codex skills folder, and reopen Codex.
 
 ## Watch progress without a browser
 
-On an interactive Windows run, add `--monitor-gui` to the fastpath command. H3 Lite opens a native progress window that reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, elapsed/estimated time, VRAM, RAM, pagefile, and the output path.
+On Windows, the fastpath opens the native progress window by default. Use `--no-monitor-gui` for a terminal-only run, or `--monitor-gui` to force it on. The window reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, elapsed/estimated time, VRAM, RAM, pagefile, and the output path.
 
 It does not require a browser, and closing the window does not interrupt generation. You can also open it independently; it will discover a fresh active H3 manifest:
 
@@ -184,6 +244,9 @@ A Set B W4A8 checkpoint once had the correct byte size but corrupted contents an
 - [MiniMax H3 ComfyUI tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)
 - [MiniMax-H3 official repository](https://github.com/MiniMax-AI/MiniMax-H3)
 - [H3 prompt-writing skill](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing)
+- [Agent workflow reference: routing, anchors, prompt enhancement, and verification](references/agent-workflow.md)
+- [Higgsfield public agent skills (design reference only, not a runtime dependency)](https://github.com/higgsfield-ai/skills)
+- [Higgsfield prompt templates and generator (optional writing aid for vague briefs)](references/prompt-assist.md)
 - [Complete component sets and checksums](references/component-sets.md)
 - [Hardware, resolution, and deployment matrix](references/deployment-matrix.md)
 

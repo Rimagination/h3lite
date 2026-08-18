@@ -22,6 +22,33 @@ For a non-Windows user, preserve the useful cross-platform guidance (prompt stru
 
 The Mac alternative described in the project notes uses MLX/Metal and a third-party `mmh3turbo` package. If a Mac user explicitly chooses that route, point them to the author's [community bundle](https://huggingface.co/yunfengwang/mmh3turbo-bundles) and package (`uvx mmh3turbo`), and state that these are external resources with independent licensing, updates, and validation. It may reduce the download footprint with GGUF/4-bit bundles, but it is outside this skill's tested component sets. Do not silently install it, mix its weights with ComfyUI models, or present its 30–43 minute 5-second 720p timings as Windows benchmarks.
 
+## Agent production workflow
+
+For complex creative requests, use the compact workflow contract in
+[`references/agent-workflow.md`](references/agent-workflow.md):
+
+```text
+intent route → reference/identity anchors → prompt enhancement → execute → verify
+```
+
+Route from the user's input and acceptance criteria, not from a style adjective.
+Use `I2VA` for a specified opening frame, `FL2VA`/`L2VA` for endpoint anchors,
+and `Ref2VA` only after its model, text encoder, and workflow are confirmed.
+For recurring characters or multi-shot work, define stable subject/reference
+labels, what must be retained, what may change, and what drift is forbidden
+before writing the timeline. This workflow pattern is local and does not add a
+cloud service, MCP dependency, second model, or second inference pass.
+
+When a creative brief is vague (for example, it only says “more cinematic”
+or “make it a nice 3D animation”), optionally read
+[`references/prompt-assist.md`](references/prompt-assist.md). It adapts the
+public Higgsfield prompt structure—stable style/identity lock, one clear scene
+action, physical camera motion, audio, and compact anti-drift constraints—to
+H3's native fields. Use it as a writing aid only: do not call Higgsfield, copy
+model-specific flags or capabilities, or let a web lookup change the local
+route, resolution, component set, or verification rules. If a live lookup is
+needed, follow the host `web-access` skill and use public pages only.
+
 ## Operating rules
 
 - **Hot path first:** for an ordinary text-to-video request on an already validated installation, run `scripts/h3_fastpath.py` once. It combines `/system_stats`, fresh-cache reuse, in-process planning/preflight, queue submission, and one bounded completion watch. Do not issue repeated one-shot status calls, reread the full reference set, run `--help`, or ask nonessential questions during this path. If the command yields a running terminal cell, wait on that cell; do not start another monitor.
@@ -42,7 +69,9 @@ The Mac alternative described in the project notes uses MLX/Metal and a third-pa
 - Check `http://127.0.0.1:8188/system_stats` before starting anything. If ComfyUI is already healthy, reuse it and do not restart it or rediscover its workflow history.
 - Preserve MiniMax H3's audio path and flow/sigma-shift handling when the user wants native audio. Do not remove audio VAE, audio conditioning, or the H3 sampling node merely to make a graph look simpler.
 - **Zero-inference optimization constraint:** hardware compatibility checks, timing calibration, face routing, and media QA may run before or after generation, but must not add sampling steps, extra generation models, or a second video inference pass. Keep the selected graph unchanged unless the user explicitly requests a different quality profile.
-- **Face-quality routing:** if the user needs a recognizable or speaking human face, do not treat low-VRAM W4A8 T2VA at 640x352 as a final-quality route. Prefer I2VA with a clear first-frame reference; prefer Ref2VA when identity must persist across shots. Read `references/face-quality.md` and inspect whether the official Ref2VA checkpoint/text encoder are actually installed before selecting that route. A registered `MiniMaxH3ReferenceToVideo` node alone is not enough.
+- **Face-quality routing:** if the user needs a recognizable or speaking human face, do not treat low-VRAM W4A8 T2VA at 640x352 as a final-quality route. Prefer I2VA with a clear first-frame reference; prefer Ref2VA when identity must persist across shots. Read `references/face-quality.md`, confirm `MiniMaxH3ReferenceToVideo` through `/object_info`, and confirm the matching reference-capable text encoder/projection and workflow before selecting that route. A registered node alone is not enough; the bundled Ref2VA templates are an experimental local path until a complete run passes media and manual identity QA.
+- **Anchor before prompt:** for multi-shot or identity-sensitive requests, first create an internal anchor sheet with stable subject/picture labels, retention rules, allowed changes, and forbidden drift. Use the same labels in the prompt, output prefix, and run manifest; read `references/agent-workflow.md` for the compact contract.
+- **Assist vague creative briefs without inventing facts:** when the request lacks a concrete camera, action, sound, or finish, read `references/prompt-assist.md` and use its bounded defaults or ask one targeted question if the omission changes the route or acceptance criteria. A public Higgsfield lookup is optional and pattern-only; fall back to the local references when browsing is unavailable.
 - On current ComfyUI builds, the API class `MiniMaxH3SigmaShift` is the native `ModelSamplingMiniMaxH3` node and uses the merged `ModelSamplingAV` video/audio schedule fix. Detect it by `/object_info` or the local source before adding a custom dual-clock sampler; do not duplicate the fix merely because the API class keeps its compatibility name.
 - Run the read-only planner before a non-trivial generation. It must report selected mode, resolution, steps, cache policy, paths, and an estimated time range. Do not present an estimate as a guarantee.
 - Run the read-only preflight after the doctor and planner. Treat low available RAM/VRAM as a caution, but stop when the pagefile is critically low, required assets are missing, or the doctor recommends an alternative backend.
@@ -50,6 +79,7 @@ The Mac alternative described in the project notes uses MLX/Metal and a third-pa
 - Do not revalidate large model files before every prompt. Trust the cached download/component manifest unless the file is missing, has a different size/mtime than recorded, the user changed components, or the previous run failed with a model/node/loader error.
 - For registered Set B files, require the recorded SHA-256 on first use or after a size/mtime change. A same-size corrupted W4A8 checkpoint produced colored mosaic frames, so byte count alone is not proof of integrity; reuse the cached integrity result on unchanged files.
 - Treat every submission as an auditable run: save the effective prompt, mutated API workflow, configuration fingerprint, queue ID, actual execution time, and verified output in the run manifest.
+- For identity-sensitive or multi-shot runs, the runtime also writes `anchors.json` beside `manifest.json` and records advisory `anchor_qa` comparisons; these signals support manual continuity review but are not face recognition.
 - Keep agent-facing status compact: omit ComfyUI's full history graph by default; use verbose history only when diagnosing a failure.
 - Never submit an identical configuration while its manifest is `submitting`, `queued`, or `running`. Return the existing prompt ID instead; use `--allow-duplicate` only when the user explicitly asks for a second identical run.
 - Treat low-VRAM timing as an empirical estimate. The first run can be much slower because kernels compile and weights move between system RAM and VRAM.
@@ -242,10 +272,12 @@ there. If cache is valid, proceed directly to generation.
 
 ### Native Windows progress window
 
-When the user wants to watch a run without opening a browser, add
-`--monitor-gui` to the fastpath command. It opens a native Windows Tkinter
-window and discovers the fresh H3 run manifest automatically. The window
-reuses the manifest's ComfyUI `client_id` and listens to the native `/ws`
+On Windows, the fastpath opens the native monitor by default, so every normal
+desktop generation has a visible progress window without an extra flag. Use
+`--no-monitor-gui` for a run that must stay terminal-only; `--monitor-gui`
+explicitly forces it on. The window discovers the fresh H3 run manifest
+automatically. It uses a native Windows Tkinter window, reuses the manifest's
+ComfyUI `client_id`, and listens to the native `/ws`
 channel, including the newer `progress_state` node events, while HTTP polling
 supplies queue state, elapsed/estimated time, GPU memory, RAM, pagefile, output
 path, and failure state. It is monitor-only: closing it does not interrupt
@@ -355,6 +387,13 @@ compat` to force the validated compatibility graph.
 Both graphs preserve the H3 sampler, native audio, ClipProj, LoRA, dual VAEs,
 and native first/last-frame inputs without optional patches.
 
+The bundled multi-image Ref2VA graphs reuse this same registered component set:
+there is no separate Ref2VA checkpoint to download. They add the native
+`MiniMaxH3ReferenceToVideo` route and bind repeated reference images through the
+resident ClipProj path. Before downloading anything, reuse the local W4A8,
+4B encoder, ClipProj, dual VAE, and Turbo LoRA files when their manifest and
+loader checks pass.
+
 Keep optional INT8 loaders and experimental cache nodes disabled until the baseline works. Start ComfyUI with a profile-appropriate command; the very-low/8 GB launch profile commonly uses `--lowvram` and `--fast-disk`, while 10–16 GB systems normally omit `--lowvram` unless preflight or an earlier OOM justifies it. Add Sage Attention only after its PyTorch/CUDA compatibility is confirmed. Treat Easy Cache and generic cache nodes as opt-in experiments: community reports and local experience show that some settings can blur or damage motion/detail. Never enable a cache solely from a speed claim; compare a short output against the uncached baseline first.
 
 After installation, rerun the doctor and stop if any required model or node is missing. Do not start a long generation while the graph contains unresolved node classes.
@@ -414,7 +453,17 @@ Identify the generation mode before writing:
 - last-frame image → `L2VA`
 - reusable images/video/audio references → `Ref2VA`
 
-Read `references/prompt-writing.md` when composing or revising a prompt. Use the exact field names and ordering required by that mode. For native base modes, the core order is:
+Read `references/prompt-writing.md` when composing or revising a prompt. For
+multi-shot, identity-sensitive, or reference-heavy requests, also read
+`references/agent-workflow.md` and build the route/anchor sheet before writing.
+For an underspecified creative request, also read
+`references/prompt-assist.md`: it supplies the optional
+`STYLE/IDENTITY LOCK → SCENE → MOTION → AUDIO → NEGATIVE` scaffold and the
+rules for translating it back to H3. Ask only for information that materially
+changes the route or acceptance criteria; otherwise state the bounded default
+and continue. Never make a website lookup a runtime dependency.
+Use the exact field names and ordering required by the selected mode. For
+native base modes, the core order is:
 
 ```text
 integrated_multimodal_description: ...
@@ -495,6 +544,41 @@ python scripts/h3_generate.py `
 This lower-level command now submits and monitors in the same foreground
 process. Use `--queue-only` only when another process must own monitoring.
 
+For the bundled multi-image Ref2VA route, repeat `--ref-image` in the order
+that the prompt names `<Picture 1>`, `<Picture 2>`, and so on. The native
+`MiniMaxH3ReferenceToVideo` node accepts image references in fixed order; do
+not combine `--ref-image` with `--first-frame` or `--last-frame`:
+
+```powershell
+python scripts/h3_generate.py `
+  --workflow-template h3_w4a8_ref2va_compat `
+  --prompt-file prompts/ref2va.txt `
+  --ref-image <identity.png> `
+  --ref-image <scene.png> `
+  --ref-image <wardrobe-or-prop.png> `
+  --comfyui <ComfyUI-path> `
+  --output-dir <ComfyUI>\output `
+  --resolution 640x352 `
+  --length 124 `
+  --steps 4 `
+  --component-set A `
+  --resolve-models `
+  --watch `
+  --json
+```
+
+The Ref2VA encoder is kept resident because the installed ClipProj node's
+dynamic image path is not reliable with the low-VRAM int8 encoder. Resident
+mode can consume more VRAM than I2VA; preflight may therefore block an 8 GB
+machine or recommend a small preview. Treat `--ref-image` as a real reference
+conditioning input, not as a style-only attachment.
+
+The native `MiniMaxH3ReferenceToVideo` node also exposes reference-video and
+reference-audio inputs. The bundled fastpath deliberately exposes repeated
+`--ref-image` first because that path is the most predictable to bind and
+verify; use a native/custom workflow when those other reference types are
+required.
+
 ```powershell
 python scripts/h3_status.py `
   --base-url http://127.0.0.1:8188 `
@@ -504,6 +588,7 @@ python scripts/h3_status.py `
   --run-root <ComfyUI>\user\h3lite_runs `
   --require-audio `
   --dynamic-check `
+  --anchor-check `
   --compact `
   --json
 ```
@@ -546,6 +631,7 @@ Do not report success from a queue ID alone. Confirm:
 - the file has a video stream and, for native H3 output, an audio stream;
 - duration, frame count, and FPS are close to the requested values;
 - the first/middle/last samples are not black, flat, or classified as `suspected_mosaic`; when the user asked for an action, dynamic QA must classify the clip as `dynamic`;
+- when identity, clothing, props, or a reference composition is an acceptance condition, sampled frames preserve the declared anchors and do not silently drift;
 - the output path and elapsed time are reported.
 - the plan's estimated range is compared with the actual ComfyUI execution time;
 - the configuration fingerprint and run manifest are recorded so a retry can be distinguished from an accidental duplicate;
@@ -574,16 +660,21 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `references/component-sets.md`: registered model/workflow sets, exact known byte sizes, runtime ABI record, and download-integrity rules.
 - `references/prompt-writing.md`: concise operational digest of MiniMax's official H3 prompt guide and prompt-writing skill.
 - `references/director-sequences.md`: end-to-end workflow for multi-segment director sequences (divide a scene into separate I2VA shots, generate consistent first frames with ImageGen including watermark crop and reference-image identity inheritance, lock character identity across prompts, W4A8 skin-quality phrasing, and stitch with ffmpeg `xfade`/`acrossfade` using the cumulative-offset formula).
+- `references/agent-workflow.md`: intent routing, reference/identity anchors, five-pass prompt enhancement, and local capability boundaries.
+- `references/prompt-assist.md`: optional Higgsfield-inspired prompt-pattern lookup for vague creative briefs; maps style/scene/motion/audio/negative cards back to H3 fields without adding a cloud dependency.
 - `references/face-quality.md`: face-first routing, official Ref2VA identity controls, low-VRAM trade-offs, and the limits of dynamic/color QA.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
 - `assets/h3_w4a8_i2v_api.json`: reusable low-VRAM I2VA graph with native first-frame input and optional acceleration patches.
 - `assets/h3_w4a8_i2v_compat_api.json`: core I2VA graph with native first-frame input and no optional acceleration patches.
+- `assets/h3_w4a8_ref2va_api.json`: experimental multi-image Ref2VA graph with the native `MiniMaxH3ReferenceToVideo` node.
+- `assets/h3_w4a8_ref2va_compat_api.json`: compatibility Ref2VA graph without optional Sage/Sol/Chunk/T8 patches.
 - `scripts/h3_doctor.py`: dependency-free hardware, disk, model, and node diagnosis.
 - `scripts/h3_plan.py`: read-only hardware, resolution, time-budget, aspect-ratio, profile, and installation-path planner.
 - `scripts/h3_preflight.py`: read-only pagefile/RAM/VRAM/process/model/node gate before queueing.
 - `scripts/h3_generate.py`: fast template-based or custom-workflow submission with profile, resolution, prompt/settings overrides, native first/last-frame binding, atomic A/B component-set selection, and queue-only mode.
-- `scripts/h3_status.py`: compact one-shot or bounded watch status, actual execution-time, media metadata verification, optional first/middle/last dynamic QA, and empirical timing-cache updates.
+- `scripts/h3_anchor.py`: deterministic prompt/reference anchor-card generation and optional JSON declaration loading; it does not add inference or rewrite the prompt.
+- `scripts/h3_status.py`: compact one-shot or bounded watch status, actual execution-time, media metadata verification, optional first/middle/last dynamic QA, advisory anchor continuity QA, and empirical timing-cache updates.
 - `scripts/h3_fastpath.py`: single-entry T2V/I2V route that reuses the environment cache, probes loaded node classes, routes component sets, and keeps queueing plus bounded verification in one command.
 - `scripts/h3_monitor_gui.py`: native Windows Tkinter progress window for live queue/sampling/resource/output visibility; it does not replace ComfyUI or interrupt a run.
 - `scripts/h3_paths.py`: Windows path normalization for `F:/...` and Git Bash `/f/...` inputs.
@@ -597,5 +688,7 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - H3 Turbo ComfyUI nodes: <https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo>
 - Cinema DNA 21:9 × 3: <https://github.com/dacnay816y62-hub/cinema-dna-21x9x3>
 - Official H3 repository and prompting guidance: <https://github.com/MiniMax-AI/MiniMax-H3>
+- Public agent-workflow design reference (not a runtime dependency): <https://github.com/higgsfield-ai/skills>
+- Public prompt-pattern references (optional writing aid, not a runtime dependency): <https://github.com/higgsfield-ai/skills/blob/main/higgsfield-video-explainer/references/prompts.md>, <https://higgsfield.ai/ai-prompt-generator>
 - Community Mac/Metal MLX port and operational notes (reference only; not a tested h3lite backend): <https://zhuanlan.zhihu.com/p/2069479566171812707>
 - Community Apple Silicon local-deployment troubleshooting (reference only; not a Windows resource source): <https://mp.weixin.qq.com/s/hN60KLN7Pkpqb0pbk-r4WQ>
