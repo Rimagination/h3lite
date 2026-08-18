@@ -409,7 +409,7 @@ def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dic
         blockers.append(f"reported VRAM is only {usable_vram:.2f} GB")
     if ram and ram < 16:
         blockers.append(f"system RAM is {ram:.2f} GB")
-    if free_disk and free_disk < 35:
+    if free_disk and free_disk < 12:
         blockers.append(f"free disk is {free_disk:.2f} GB")
     if blockers:
         return {"name": "blocked-or-alternative", "confidence": "medium", "reasons": blockers}

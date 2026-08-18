@@ -110,6 +110,13 @@ texture`, `soft highlight roll-off`, `restrained production design`, and
 `local optical softness`. These are supporting constraints, not substitutes for
 an action or composition.
 
+> **Skin on the validated W4A8/4B route:** avoid asking for `natural skin
+> texture`, `freckles`, `stubble`, or `realistic roughness`. W4A8 quantization
+> turns those into abrasive grain/sandpaper. Use `smooth refined skin, fine
+> delicate pores, soft highlight roll-off, not plastic, not rough` plus compact
+> anti-rough constraints (`no heavy grain, no waxy plastic, no oily sheen`)
+> instead. See `references/director-sequences.md` §4.
+
 ## 5. Color and anti-template checks
 
 Write a color thesis with a physical source, for example:

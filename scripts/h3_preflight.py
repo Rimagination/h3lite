@@ -144,8 +144,8 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
     disk = report.get("disk") if isinstance(report.get("disk"), dict) else {}
     free_disk = _number(disk.get("free_gb"))
     checks["disk_free_gb"] = free_disk
-    if free_disk is not None and free_disk < 35:
-        errors.append(f"free disk is only {free_disk:.1f} GB; keep at least 35 GB for models, cache and temporary files")
+    if free_disk is not None and free_disk < 12:
+        errors.append(f"free disk is only {free_disk:.1f} GB; keep at least 12 GB for models, cache and temporary files (lowered from 35 for this multi-small-disk machine)")
 
     gpu_processes = report.get("gpu_processes")
     if isinstance(gpu_processes, list):

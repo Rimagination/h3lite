@@ -240,6 +240,46 @@ download pages, model hashes, dependency versions, or official docs during a
 normal generation unless the previous command returns a concrete error pointing
 there. If cache is valid, proceed directly to generation.
 
+### Native Windows progress window
+
+When the user wants to watch a run without opening a browser, add
+`--monitor-gui` to the fastpath command. It opens a native Windows Tkinter
+window and discovers the fresh H3 run manifest automatically. The window
+reuses the manifest's ComfyUI `client_id` and listens to the native `/ws`
+channel, including the newer `progress_state` node events, while HTTP polling
+supplies queue state, elapsed/estimated time, GPU memory, RAM, pagefile, output
+path, and failure state. It is monitor-only: closing it does not interrupt
+generation.
+The node count is structural workflow progress, not elapsed-time progress: H3
+nodes have very different runtimes. The window therefore shows node completion
+separately, displays the current node's observed runtime, and keeps ETA on the
+empirical timing estimate instead of treating `4/5` as `80%` of the time. The
+track is segmented by workflow node so completed, active, and pending nodes
+remain visually distinct.
+The default window is `760x620`; its content area has a vertical scrollbar and
+mouse-wheel support for smaller displays or larger system scaling.
+The monitor JSON marks these semantics as `progress_basis` (`node_completion`
+or `sampling_steps`) and `eta_basis` (`empirical` or `live_progress`) so an
+Agent can report them without inventing a time percentage.
+When available, elapsed time comes from the run manifest's measured execution
+time; the wall-clock timestamp is only the fallback before that field exists.
+Old `running` manifests are ignored during automatic discovery; pass
+`--prompt-id` to inspect a specific historical run.
+
+To open the monitor independently:
+
+```powershell
+python scripts/h3_monitor_gui.py `
+  --comfyui <ComfyUI-path>
+```
+
+Use `--once --no-websocket` for a one-shot JSON diagnostic. If the optional
+WebSocket client is unavailable, the window remains usable through HTTP
+polling, but the progress track stays static and explicitly reports that live
+quantifiable progress is unavailable. It never substitutes an animated bar
+for a measured percentage. An MCP wrapper is unnecessary for this local GUI;
+an Agent can query the same monitor JSON separately when it needs status.
+
 Use the lower-level `h3_doctor.py`, `h3_plan.py`, `h3_preflight.py`,
 `h3_generate.py`, and `h3_status.py` commands only for installation, recovery,
 custom workflows, or diagnosis. Never replace the fastpath with repeated
@@ -403,6 +443,7 @@ Make the prompt operational:
 If the selected ComfyUI graph uses a ClipProj/krea2 or another custom prompt schema, inspect its example workflow first. Adapt the official semantic structure to the node's accepted field while preserving the graph's required fields; do not blindly paste a T2VA prompt into a Ref2VA input or vice versa.
 - For a face-quality attempt, constrain the first shot to one face, a front or three-quarter orientation, visible eyes, stable hair/clothing anchors, and static or small-amplitude motion. Treat dialogue as a second-stage stressor. A valid MP4 with dynamic/color/audio checks can still have unusable faces; visually inspect face consistency at first/middle/last frames.
 - For Chinese prompts, avoid an extremely short noun-only description. H3's long multimodal sequence can make a one- or two-token Chinese prompt easy for the seed to dominate. Add concrete subject traits, setting, framing, lighting, and motion; as a practical starting point, use roughly 30–50 Chinese characters or an equivalent amount of structured detail, then validate with a cheap preview.
+- For a director-level multi-shot sequence (establishing + over-the-shoulder + reverse + reveal) where H3's single-continuous-shot limit blocks real coverage, see `references/director-sequences.md`. It covers splitting the scene into separate I2VA segments, generating consistent first-frame images with ImageGen (watermark crop, reference-image identity inheritance), locking character identity across prompts, W4A8 skin-quality phrasing, and stitching with ffmpeg `xfade`/`acrossfade`.
 
 ### 5. Generate through ComfyUI
 
@@ -532,6 +573,7 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `references/deployment-matrix.md`: tested low-VRAM profile, official fallback profile, model folders, node roles, launch flags, and failure triage.
 - `references/component-sets.md`: registered model/workflow sets, exact known byte sizes, runtime ABI record, and download-integrity rules.
 - `references/prompt-writing.md`: concise operational digest of MiniMax's official H3 prompt guide and prompt-writing skill.
+- `references/director-sequences.md`: end-to-end workflow for multi-segment director sequences (divide a scene into separate I2VA shots, generate consistent first frames with ImageGen including watermark crop and reference-image identity inheritance, lock character identity across prompts, W4A8 skin-quality phrasing, and stitch with ffmpeg `xfade`/`acrossfade` using the cumulative-offset formula).
 - `references/face-quality.md`: face-first routing, official Ref2VA identity controls, low-VRAM trade-offs, and the limits of dynamic/color QA.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
@@ -543,6 +585,7 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 - `scripts/h3_generate.py`: fast template-based or custom-workflow submission with profile, resolution, prompt/settings overrides, native first/last-frame binding, atomic A/B component-set selection, and queue-only mode.
 - `scripts/h3_status.py`: compact one-shot or bounded watch status, actual execution-time, media metadata verification, optional first/middle/last dynamic QA, and empirical timing-cache updates.
 - `scripts/h3_fastpath.py`: single-entry T2V/I2V route that reuses the environment cache, probes loaded node classes, routes component sets, and keeps queueing plus bounded verification in one command.
+- `scripts/h3_monitor_gui.py`: native Windows Tkinter progress window for live queue/sampling/resource/output visibility; it does not replace ComfyUI or interrupt a run.
 - `scripts/h3_paths.py`: Windows path normalization for `F:/...` and Git Bash `/f/...` inputs.
 - `scripts/h3_cleanup.py`: dry-run-first maintenance for old timestamped run snapshots; preserves environment state and recent runs.
 

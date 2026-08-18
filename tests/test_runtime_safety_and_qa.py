@@ -683,6 +683,12 @@ class FastPathContractTests(unittest.TestCase):
         self.assertIn("h3_fastpath.py", skill)
         self.assertIn("Do not issue repeated one-shot status calls", skill)
 
+    def test_skill_documents_native_progress_monitor(self):
+        skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
+
+        self.assertIn("--monitor-gui", skill)
+        self.assertIn("h3_monitor_gui.py", skill)
+
     def test_skill_documents_bundled_ffprobe_recovery(self):
         skill = (Path(__file__).resolve().parents[1] / "SKILL.md").read_text(encoding="utf-8")
 

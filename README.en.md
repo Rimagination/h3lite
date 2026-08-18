@@ -160,6 +160,19 @@ Download one complete set. Merge its `models` and `custom_nodes` folders into `<
 
 Without agent installation, open the repository page and choose **Code → Download ZIP**. Extract it, place the `h3lite` folder in the Codex skills folder, and reopen Codex.
 
+## Watch progress without a browser
+
+On an interactive Windows run, add `--monitor-gui` to the fastpath command. H3 Lite opens a native progress window that reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, elapsed/estimated time, VRAM, RAM, pagefile, and the output path.
+
+It does not require a browser, and closing the window does not interrupt generation. You can also open it independently; it will discover a fresh active H3 manifest:
+
+```powershell
+python scripts/h3_monitor_gui.py `
+  --comfyui F:\MiniMax-H3\ComfyUI
+```
+
+The monitor reuses the manifest's ComfyUI `client_id` and understands the newer `progress_state` node events. Its track is segmented by workflow node: completed, active, and pending nodes remain distinct. The default window is `760x620` with a vertical scrollbar and mouse-wheel support, so all controls remain reachable on smaller displays. It labels node completion as structural workflow progress rather than elapsed-time progress, shows the current node's observed runtime, and keeps ETA on the empirical timing estimate. When ComfyUI has not exposed quantifiable progress, the track stays static and says why; it does not animate a fake percentage. With no active task it shows a waiting state. Stale `running` manifests are ignored during automatic discovery. Use `--once --no-websocket` for a one-shot diagnostic. The local window connects directly to ComfyUI, so an MCP bridge is not required.
+
 ## Component integrity
 
 H3 Lite treats the diffusion model, text encoder, ClipProj, Turbo LoRA, dual VAEs, workflow, and node versions as one component set instead of mixing plausible filenames.
