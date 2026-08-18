@@ -266,6 +266,11 @@ Use configurable paths; the names below are the expected role and common filenam
 
 The exact ClipProj folder can vary with the custom node version. Inspect its example workflow and node documentation instead of guessing.
 
+The bundled multi-image Ref2VA graphs reuse every role in this table; they do
+not introduce a separate Ref2VA checkpoint. The additional requirements are the
+native `MiniMaxH3ReferenceToVideo` node and a ClipProj `resident` image path,
+which changes VRAM residency rather than the disk component set.
+
 The bundled `assets/h3_w4a8_t2v_api.json` and `assets/h3_w4a8_i2v_api.json` are
 pinned to the validated
 `minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors` variant and the

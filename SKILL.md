@@ -387,6 +387,13 @@ compat` to force the validated compatibility graph.
 Both graphs preserve the H3 sampler, native audio, ClipProj, LoRA, dual VAEs,
 and native first/last-frame inputs without optional patches.
 
+The bundled multi-image Ref2VA graphs reuse this same registered component set:
+there is no separate Ref2VA checkpoint to download. They add the native
+`MiniMaxH3ReferenceToVideo` route and bind repeated reference images through the
+resident ClipProj path. Before downloading anything, reuse the local W4A8,
+4B encoder, ClipProj, dual VAE, and Turbo LoRA files when their manifest and
+loader checks pass.
+
 Keep optional INT8 loaders and experimental cache nodes disabled until the baseline works. Start ComfyUI with a profile-appropriate command; the very-low/8 GB launch profile commonly uses `--lowvram` and `--fast-disk`, while 10–16 GB systems normally omit `--lowvram` unless preflight or an earlier OOM justifies it. Add Sage Attention only after its PyTorch/CUDA compatibility is confirmed. Treat Easy Cache and generic cache nodes as opt-in experiments: community reports and local experience show that some settings can blur or damage motion/detail. Never enable a cache solely from a speed claim; compare a short output against the uncached baseline first.
 
 After installation, rerun the doctor and stop if any required model or node is missing. Do not start a long generation while the graph contains unresolved node classes.

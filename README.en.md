@@ -209,6 +209,13 @@ Do not mix Set A and Set B. The Baidu Netdisk packages contain the matching mode
 
 Download one complete set. Merge its `models` and `custom_nodes` folders into `<ComfyUI>`, import the JSON files from `workflows`, and keep `component-manifest.json`. If Baidu Netdisk is unavailable, use the exact filenames, sizes, and hashes in [`references/component-sets.md`](references/component-sets.md) when downloading from upstream sources.
 
+**Ref2VA does not require a separate model package.** The bundled multi-image
+Ref2VA graphs reuse the selected set's W4A8 diffusion model, 4B text encoder,
+ClipProj, dual VAEs, and Turbo LoRA; they add a workflow entry and reference
+image binding. If those roles are already present, reuse and verify the native
+`MiniMaxH3ReferenceToVideo` node instead of downloading a second “Ref2VA
+checkpoint.”
+
 ### Manual skill installation
 
 Without agent installation, open the repository page and choose **Code → Download ZIP**. Extract it, place the `h3lite` folder in the Codex skills folder, and reopen Codex.

@@ -138,6 +138,8 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 
 下载一个完整方案即可。将包内 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，导入工作流 JSON，并保留 `component-manifest.json`。百度网盘不可用时，按 [`references/component-sets.md`](references/component-sets.md) 的文件名、大小和哈希从上游来源下载。
 
+**Ref2VA 不需要单独的模型包。** bundled 多图 Ref2VA 工作流复用所选组件集中的 W4A8 扩散模型、4B 文本编码器、ClipProj、双 VAE 和 Turbo LoRA；只新增工作流入口和参考图绑定。若这些组件已经存在，Agent 应先复用并检查原生 `MiniMaxH3ReferenceToVideo` 节点，不要重复下载所谓的“Ref2VA checkpoint”。
+
 ### 手动安装 Skill
 
 打开仓库页面，选择 **Code → Download ZIP**。解压后把 `h3lite` 文件夹放入 Codex 的 skills 文件夹，再重新打开 Codex。
