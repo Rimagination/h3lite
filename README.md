@@ -80,7 +80,9 @@ https://github.com/Rimagination/h3lite
 
 ### Set A 路线对比
 
-下面六条视频使用同一提示词、Set A 组件和 `640×352 / 4 步 / 原生音频`，只改变加速节点组合。点击海报打开播放器。
+下面六条视频都使用红球滚动场景、同一套提示词、Set A 组件和 `640×352 / 4 步 / 原生音频`，只改变加速节点组合。点击海报打开播放器。
+
+场景：一颗小型哑光红色橡胶球从画面左侧进入，在灰色混凝土地面上向右滚动并滚出画面。
 
 <table>
   <tr>
@@ -131,7 +133,7 @@ https://github.com/Rimagination/h3lite
   </tr>
 </table>
 
-展示页使用 GitHub Pages 播放器、`docs/videos/` 中的 MP4 和仓库内海报；`assets` Release 提供下载备份。
+展示页使用 GitHub Pages 播放器、`docs/videos/` 中的 MP4 和仓库内海报；[`assets-rolling-redball` Release](https://github.com/Rimagination/h3lite/releases/tag/assets-rolling-redball) 提供这六条路线的下载备份。
 
 ### 常见视频分辨率
 

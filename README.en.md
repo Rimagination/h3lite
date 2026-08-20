@@ -55,7 +55,9 @@ Start with `fast`: four steps, native audio, and 640×352. Use `balanced` for si
 
 ### Set A route comparison
 
-These six clips use the same prompt, Set A components, and `640×352 / 4 steps / native audio`; only the acceleration-node combination changes. Click a poster to open the player.
+These six clips use the same rolling-red-ball scene, prompt, Set A components, and `640×352 / 4 steps / native audio`; only the acceleration-node combination changes. Click a poster to open the player.
+
+Scenario: a small matte red rubber ball enters from the left, rolls right across grey concrete, and exits the frame.
 
 <table>
   <tr>
@@ -106,7 +108,7 @@ These six clips use the same prompt, Set A components, and `640×352 / 4 steps /
   </tr>
 </table>
 
-The player uses GitHub Pages, MP4 files under `docs/videos/`, and repository posters. The `assets` Release remains available as a download backup.
+The player uses GitHub Pages, MP4 files under `docs/videos/`, and repository posters. The [`assets-rolling-redball` Release](https://github.com/Rimagination/h3lite/releases/tag/assets-rolling-redball) provides download copies of these six route clips.
 
 ## From brief to verified clip
 
