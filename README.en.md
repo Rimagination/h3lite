@@ -74,6 +74,91 @@ Prompt enhancement happens in five passes: one-sentence intent → observable id
 
 When a brief is vague (for example, “make it more cinematic” or “a nice 3D animation”), the agent may read [`references/prompt-assist.md`](references/prompt-assist.md) and use Higgsfield's public prompt organization—stable style/identity locks, `SCENE`, `MOTION`, `AUDIO`, and a short `NEGATIVE` clause—as a writing scaffold. It is only an optional aid: H3 Lite does not call Higgsfield, copy its model parameters, or change the local Windows low-VRAM route. If browsing is unavailable, the agent falls back to the local H3 references.
 
+## Showcase
+
+These six clips use the same prompt, Set A components, LightX2V four-step LoRA, `640×352 / 124 frames / 24 fps`, and native audio. Only the acceleration-node combination changes. They represent a runnable local-generation floor and route comparison, not the final image-quality ceiling; higher resolution, more sampling steps, and LoRA-strength tuning can improve the result. Click a poster to open the native video player.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-compat">
+        <img src="docs/gallery/seta-lightx2v-compat.jpg" width="280" alt="Set A LightX2V compatibility baseline">
+      </a><br>
+      <strong>Compatibility baseline</strong><br>
+      640×352 · 5 sec · native audio
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sage">
+        <img src="docs/gallery/seta-lightx2v-sage.jpg" width="280" alt="Set A LightX2V Sage">
+      </a><br>
+      <strong>Sage only</strong><br>
+      640×352 · 5 sec · native audio
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-ffn">
+        <img src="docs/gallery/seta-lightx2v-ffn.jpg" width="280" alt="Set A LightX2V FFN">
+      </a><br>
+      <strong>FFN only</strong><br>
+      640×352 · 5 sec · native audio
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-blockcache">
+        <img src="docs/gallery/seta-lightx2v-blockcache.jpg" width="280" alt="Set A LightX2V Block Cache">
+      </a><br>
+      <strong>Block Cache only</strong><br>
+      640×352 · 5 sec · native audio
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sol">
+        <img src="docs/gallery/seta-lightx2v-sol.jpg" width="280" alt="Set A LightX2V Sol">
+      </a><br>
+      <strong>Sol only</strong><br>
+      640×352 · 5 sec · native audio
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-all-accel">
+        <img src="docs/gallery/seta-lightx2v-all-accel.jpg" width="280" alt="Set A LightX2V full acceleration">
+      </a><br>
+      <strong>Full acceleration</strong><br>
+      Sage + Sol + FFN + Block Cache
+    </td>
+  </tr>
+</table>
+
+### Existing generated cases
+
+The earlier red-ball, golden-retriever, and starship examples now use the same showcase page for action validation, timeline prompting, and complex temporal design.
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball">
+        <img src="docs/gallery/case-red-ball.jpg" width="280" alt="H3 Lite red-ball example">
+      </a><br>
+      <strong>Bouncing red ball</strong><br>
+      Action and audio validation · 5 sec
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever">
+        <img src="docs/gallery/case-golden-retriever.jpg" width="280" alt="H3 Lite golden-retriever example">
+      </a><br>
+      <strong>Golden retriever wakes</strong><br>
+      Timeline prompt · 5 sec
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-starship-jump">
+        <img src="docs/gallery/case-starship-jump.jpg" width="280" alt="H3 Lite starship-jump example">
+      </a><br>
+      <strong>Starship jump</strong><br>
+      Complex timing and transitions · 8 sec
+    </td>
+  </tr>
+</table>
+
+The MP4 files live in the GitHub Release tagged `assets`; the repository keeps the posters and player page lightweight. Upload the matching filenames and the posters become playable from the showcase.
+
 ## Quick validation: bouncing red ball
 
 After installation, use a simple five-second action with clear sound to verify the full pipeline:
@@ -124,15 +209,19 @@ Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a sta
 
 ▶️ [Play / download the starship-jump video](assets/examples/h3lite-starship-jump.mp4)
 
-### Image to video: ramen family dinner
+### Image to video: sitcom living-room channel change
 
-Download or attach H3 Lite's [ramen example first frame](assets/examples/h3lite-i2va-ramen-first-frame.jpg) and designate it as the first video frame.
+Download or attach the [example first frame](assets/examples/h3lite-i2va-familyguy-first-frame.png) and designate it as the first video frame. This example uses original characters and an original setting with bold outlines, flat cel colors, and exaggerated American adult-animation expressions. It demonstrates how I2VA can preserve the cast, wardrobe, and living-room composition while advancing a continuous action.
 
-![H3 Lite I2VA ramen example first frame](assets/examples/h3lite-i2va-ramen-first-frame.jpg)
+![H3 Lite I2VA sitcom living-room example first frame](assets/examples/h3lite-i2va-familyguy-first-frame.png)
+
+Current example: `864×480 · 5 sec · 8 steps · Set A compatibility route · native audio`.
 
 ```text
-Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate an 8-second video while preserving its people, ramen, table, room, and composition. Keep the camera static. Begin with the blue-and-white ramen bowl, chashu, scallions, and rising steam in crisp foreground focus while the family remains softly blurred. Smoothly rack focus from the ramen to the family: the bowl softens, their smiles and small dining gestures become clear, and steam continues drifting through the foreground. Keep the quiet broth simmer, ceramic and chopstick clinks, and warm room tone. Add gentle acoustic guitar and koto music, with no intelligible dialogue.
+Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate a 5-second landscape video. Preserve the original American adult-animation look, the four family members, their clothing, the living-room layout, the television position, the bold dark outlines, the flat cel colors, and the locked medium-wide composition. The father suddenly leans forward and points the remote at the television to change the channel; the mother crosses her arms and rolls her eyes; the son and daughter turn toward the father with exaggerated annoyed expressions. The TV glow flickers slightly and the popcorn bowl jiggles; end with the father proudly pointing at the screen while everyone else stares at him. Keep the television room tone, remote clicks, couch rustle, a small popcorn-bowl rattle, and brief nonverbal reactions, with light playful sitcom music and no intelligible dialogue.
 ```
+
+▶️ [Play / download the 8-step sitcom living-room video](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
 
 ### Video and audio reference: pink suit and black lamb
 

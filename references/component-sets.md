@@ -85,10 +85,12 @@ when the file changes, the cache is absent, or failure recovery invalidates it.
 
 ## Experimental quality route
 
-`minimax_h3_turbo_v4_step600_ema.safetensors` is an opt-in quality candidate.
-Record it as a separate timing and quality variant. Do not make it the global
-default until a same-machine comparison confirms action adherence, coherent
-frames, native audio, and acceptable time.
+`minimax_h3_turbo_v4_step600_ema.safetensors` is an opt-in quality candidate for
+the compatibility graph only. H3 Lite rejects this LoRA when the workflow also
+contains Sage/Sol/Chunk/T8 acceleration nodes: local fast-path tests showed
+severe ghosting, motion trails, and color artifacts. Record v4 as a separate
+quality variant and use a `*_compat_api.json` workflow. For the 4-step fast route,
+use the registered LightX2V/Turbo LoRA instead.
 
 ## Runtime compatibility record
 

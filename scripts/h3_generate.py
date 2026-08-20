@@ -28,6 +28,17 @@ from h3_paths import normalize_windows_path
 from h3_anchor import anchor_summary, build_anchor_sheet, write_anchor_sheet
 
 
+V4_LORA_FILENAME = "minimax_h3_turbo_v4_step600_ema.safetensors"
+ACCELERATION_NODE_CLASSES = frozenset(
+    {
+        "MiniMaxH3MemoryEfficientSageAttentionPatch",
+        "MiniMaxH3MemoryEfficientSolAttentionPatch",
+        "MiniMaxH3ChunkFeedForward",
+        "MiniMaxH3BlockCacheT8",
+    }
+)
+
+
 COMPONENT_SETS = {
     "validated-low-vram-a": {
         "unet_name": "minimax_h3_fl2va_pruned_w4a8_mixed_ax1y2jp.safetensors",
@@ -257,6 +268,57 @@ def load_workflow(path: Path) -> dict[str, Any]:
     if "nodes" in workflow and isinstance(workflow["nodes"], list):
         raise RuntimeError("This helper expects ComfyUI API-format JSON, not a UI workflow with a nodes list")
     return workflow
+
+
+def _workflow_lora_names(workflow: dict[str, Any]) -> list[str]:
+    """Return LoRA filenames present in model-only LoRA loader nodes."""
+    names: list[str] = []
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        if node.get("class_type") != "LoraLoaderModelOnly":
+            continue
+        name = node["inputs"].get("lora_name")
+        if isinstance(name, str) and name.strip():
+            names.append(name.strip())
+    return names
+
+
+def _workflow_acceleration_nodes(workflow: dict[str, Any]) -> list[str]:
+    """Return optional acceleration node classes present in an API workflow."""
+    found: list[str] = []
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        class_type = str(node.get("class_type", ""))
+        if class_type in ACCELERATION_NODE_CLASSES and class_type not in found:
+            found.append(class_type)
+    return found
+
+
+def validate_lora_acceleration_pairing(
+    workflow: dict[str, Any],
+    *,
+    workflow_path: Path | None = None,
+) -> None:
+    """Reject the locally disproven v4-LoRA plus accelerated-graph pairing."""
+    v4_names = [
+        name
+        for name in _workflow_lora_names(workflow)
+        if name.replace("\\", "/").rsplit("/", 1)[-1].casefold() == V4_LORA_FILENAME.casefold()
+    ]
+    acceleration_nodes = _workflow_acceleration_nodes(workflow)
+    if not v4_names or not acceleration_nodes:
+        return
+    template = f" in {workflow_path.name}" if workflow_path is not None else ""
+    raise RuntimeError(
+        "Disabled H3 Lite route: "
+        f"{V4_LORA_FILENAME} cannot be combined with the accelerated graph{template}. "
+        "This pairing produced severe ghosting, motion trails, and color artifacts "
+        "in local validation. Use a *_compat_api.json workflow for v4, or switch "
+        "to the registered LightX2V/Turbo 4-step LoRA for the fast route. "
+        f"Detected acceleration nodes: {', '.join(acceleration_nodes)}"
+    )
 
 
 def default_workflow_path(template: str) -> Path:
@@ -1273,6 +1335,7 @@ def main() -> int:
         target = choose_prompt_target(workflow, args.prompt_node, args.prompt_field)
         workflow[str(target["node"])]["inputs"][str(target["field"])] = prompt
         apply_overrides(workflow, args)
+        validate_lora_acceleration_pairing(workflow, workflow_path=workflow_path)
         reference_inputs = bind_reference_images(
             workflow,
             first_frame=args.first_frame,
