@@ -165,9 +165,9 @@ After installation, use a simple five-second action with clear sound to verify t
 Use H3 Lite to generate a 5-second landscape video. A small matte red rubber ball bounces twice on grey concrete, then rolls out of frame to the right. Use a locked-off low-angle camera, cold overcast daylight, shallow depth of field, and a 35mm cinematic look. Keep the sounds of the ball striking the ground twice and rolling across the concrete. No music.
 ```
 
-[![H3 Lite bouncing red-ball video poster](docs/gallery/case-red-ball.jpg)](assets/examples/h3lite-red-ball-and-plant.mp4)
+[![H3 Lite bouncing red-ball video poster](docs/gallery/case-red-ball.jpg)](https://rimagination.github.io/h3lite/?video=case-red-ball)
 
-Click the poster to play or download the video.
+Click the poster to open the player.
 
 This checks action count, motion direction, video muxing, and native audio.
 
@@ -195,9 +195,9 @@ Use H3 Lite to generate a 5-second video:
 [2s-5s] The puppy slowly wakes up, stretches its front paws forward, yawns with a tiny squeak, then sits up and looks around with bright curious eyes as its tail starts wagging.
 ```
 
-[![H3 Lite golden-retriever video poster](docs/gallery/case-golden-retriever.jpg)](assets/examples/h3lite-golden-retriever-puppy.mp4)
+[![H3 Lite golden-retriever video poster](docs/gallery/case-golden-retriever.jpg)](https://rimagination.github.io/h3lite/?video=case-golden-retriever)
 
-Click the poster to play or download the video.
+Click the poster to open the player.
 
 Timeline segments are easier to follow than packing many ordered actions into one sentence.
 
@@ -209,9 +209,9 @@ This eight-second T2VA example is adapted from MiniMax H3's reproducible cases:
 Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a starship, a short-haired female captain stands with her back to the camera before a curved observation window. A massive dark fleet waits against a deep-purple nebula. The camera slowly pushes in as the fleet's blue engines intensify. At about 3.5 seconds, cut to a close-up of the captain. The fleet suddenly jumps to hyperspace; a white flash floods the bridge, the camera shakes violently, and the captain staggers before bracing herself. As the light fades, only the empty nebula remains and she slowly closes her eyes. Keep the low bridge hum, rising engine whine, hyperspace boom, and metallic vibration, with a swelling space-opera orchestral score.
 ```
 
-[![H3 Lite starship-jump video poster](docs/gallery/case-starship-jump.jpg)](assets/examples/h3lite-starship-jump.mp4)
+[![H3 Lite starship-jump video poster](docs/gallery/case-starship-jump.jpg)](https://rimagination.github.io/h3lite/?video=case-starship-jump)
 
-Click the poster to play or download the video.
+Click the poster to open the player.
 
 ### Image to video: sitcom living-room channel change
 
@@ -225,9 +225,9 @@ Current example: `864×480 · 5 sec · 8 steps · Set A compatibility route · n
 Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate a 5-second landscape video. Preserve the original American adult-animation look, the four family members, their clothing, the living-room layout, the television position, the bold dark outlines, the flat cel colors, and the locked medium-wide composition. The father suddenly leans forward and points the remote at the television to change the channel; the mother crosses her arms and rolls her eyes; the son and daughter turn toward the father with exaggerated annoyed expressions. The TV glow flickers slightly and the popcorn bowl jiggles; end with the father proudly pointing at the screen while everyone else stares at him. Keep the television room tone, remote clicks, couch rustle, a small popcorn-bowl rattle, and brief nonverbal reactions, with light playful sitcom music and no intelligible dialogue.
 ```
 
-[![H3 Lite 8-step sitcom living-room video poster](assets/examples/h3lite-i2va-familyguy-first-frame.png)](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
+[![H3 Lite 8-step sitcom living-room video poster](assets/examples/h3lite-i2va-familyguy-first-frame.png)](https://rimagination.github.io/h3lite/?video=case-familyguy)
 
-Click the poster to play or download the video.
+Click the poster to open the player.
 
 ### Video and audio reference: pink suit and black lamb
 

@@ -217,9 +217,9 @@ Set A 与 Set B 各自包含匹配的模型、节点、工作流和清单，选�
 请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
 ```
 
-[![H3 Lite 红球弹跳视频封面](docs/gallery/case-red-ball.jpg)](assets/examples/h3lite-red-ball-and-plant.mp4)
+[![H3 Lite 红球弹跳视频封面](docs/gallery/case-red-ball.jpg)](https://rimagination.github.io/h3lite/?video=case-red-ball)
 
-点击封面播放或下载视频。
+点击封面打开播放器。
 
 检查视频、动作、画面运动和原生声音，确认后再提高画布或复杂度。
 
@@ -247,9 +247,9 @@ Set A 与 Set B 各自包含匹配的模型、节点、工作流和清单，选�
 [2s-5s] 幼犬慢慢醒来，前爪向前伸展，打了个带着细小吱声的哈欠，然后坐起身，用明亮好奇的眼睛环顾四周，尾巴开始摇晃。
 ```
 
-[![H3 Lite 金毛幼犬视频封面](docs/gallery/case-golden-retriever.jpg)](assets/examples/h3lite-golden-retriever-puppy.mp4)
+[![H3 Lite 金毛幼犬视频封面](docs/gallery/case-golden-retriever.jpg)](https://rimagination.github.io/h3lite/?video=case-golden-retriever)
 
-点击封面播放或下载视频。
+点击封面打开播放器。
 
 ### 文生视频：星舰跃迁
 
@@ -259,9 +259,9 @@ Set A 与 Set B 各自包含匹配的模型、节点、工作流和清单，选�
 请使用 H3 Lite，生成一个 8 秒 16:9 视频：昏暗而宽阔的星舰舰桥内，一位短发女舰长背对镜头站在弧形观察窗前，窗外的深紫色星云中排列着庞大的黑色舰队。镜头先缓慢推近，舰队尾部的蓝色引擎逐渐增强；约 3.5 秒时切到舰长面部特写，舰队突然跃迁，强烈白光淹没舰桥，冲击使镜头剧烈震动，舰长踉跄后重新站稳。白光消退，窗外只剩空旷星云，她缓缓闭上眼睛。保留舰桥低沉嗡鸣、引擎蓄能声、跃迁爆响和金属震动声，配以逐渐增强的太空歌剧管弦乐。
 ```
 
-[![H3 Lite 星舰跃迁视频封面](docs/gallery/case-starship-jump.jpg)](assets/examples/h3lite-starship-jump.mp4)
+[![H3 Lite 星舰跃迁视频封面](docs/gallery/case-starship-jump.jpg)](https://rimagination.github.io/h3lite/?video=case-starship-jump)
 
-点击封面播放或下载视频。
+点击封面打开播放器。
 
 ### 图生视频：恶搞之家式客厅换台
 
@@ -275,9 +275,9 @@ Set A 与 Set B 各自包含匹配的模型、节点、工作流和清单，选�
 请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 5 秒横屏视频。保持原创美式成人动画风格、四位家庭成员、服装、客厅布局、电视位置、粗黑轮廓、平涂色彩和中广角固定构图。父亲突然前倾，用遥控器对着电视换台；母亲抱臂翻白眼；儿子和女儿转向父亲，露出夸张的不耐烦表情。电视光轻微闪烁，爆米花碗轻轻晃动；结尾父亲得意地指着电视，其他人一起盯着他。保留电视环境声、遥控器按键声、沙发摩擦声、爆米花碗轻响和短促的非语言反应，配轻快的情景喜剧音乐，不要清晰对白。
 ```
 
-[![H3 Lite 恶搞之家式客厅 8 步视频封面](assets/examples/h3lite-i2va-familyguy-first-frame.png)](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
+[![H3 Lite 恶搞之家式客厅 8 步视频封面](assets/examples/h3lite-i2va-familyguy-first-frame.png)](https://rimagination.github.io/h3lite/?video=case-familyguy)
 
-点击封面播放或下载视频。
+点击封面打开播放器。
 
 ### Ref2VA：视频与声音参考
 
