@@ -62,6 +62,91 @@ Mac 用户不会被引导安装 CUDA 或 Windows 虚拟环境。若明确选择 
 
 T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动选择。当前 fastpath 也支持重复 `--ref-image` 自动选择实验性的 Ref2VA 工作流；实际运行前仍必须确认 `MiniMaxH3ReferenceToVideo`、匹配的 ClipProj/文本编码器和工作流已经加载。
 
+## 作品展示
+
+下面六条视频使用同一提示词、Set A 组件、LightX2V 4 步 LoRA、`640×352 / 124 帧 / 24 fps` 和原生音频，只改变加速节点组合。它们只作为本地视频生成的可运行下限和路线对照；提高分辨率、采样步数、LoRA 强度等参数后，画质仍可继续提升。点击海报进入原生视频播放页。
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-compat">
+        <img src="docs/gallery/seta-lightx2v-compat.jpg" width="280" alt="Set A LightX2V 兼容基线">
+      </a><br>
+      <strong>兼容基线</strong><br>
+      640×352 · 5 秒 · 原生音频
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sage">
+        <img src="docs/gallery/seta-lightx2v-sage.jpg" width="280" alt="Set A LightX2V Sage">
+      </a><br>
+      <strong>仅 Sage</strong><br>
+      640×352 · 5 秒 · 原生音频
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-ffn">
+        <img src="docs/gallery/seta-lightx2v-ffn.jpg" width="280" alt="Set A LightX2V FFN">
+      </a><br>
+      <strong>仅 FFN</strong><br>
+      640×352 · 5 秒 · 原生音频
+    </td>
+  </tr>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-blockcache">
+        <img src="docs/gallery/seta-lightx2v-blockcache.jpg" width="280" alt="Set A LightX2V Block Cache">
+      </a><br>
+      <strong>仅 Block Cache</strong><br>
+      640×352 · 5 秒 · 原生音频
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sol">
+        <img src="docs/gallery/seta-lightx2v-sol.jpg" width="280" alt="Set A LightX2V Sol">
+      </a><br>
+      <strong>仅 Sol</strong><br>
+      640×352 · 5 秒 · 原生音频
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-all-accel">
+        <img src="docs/gallery/seta-lightx2v-all-accel.jpg" width="280" alt="Set A LightX2V 全加速">
+      </a><br>
+      <strong>全加速</strong><br>
+      Sage + Sol + FFN + Block Cache
+    </td>
+  </tr>
+</table>
+
+### 既有生成案例
+
+之前的红球、金毛和星舰案例也统一放入展示页，分别对应动作验证、分段提示和复杂时序三类任务。
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball">
+        <img src="docs/gallery/case-red-ball.jpg" width="280" alt="H3 Lite 红球弹跳案例">
+      </a><br>
+      <strong>红球弹跳</strong><br>
+      动作与声音验证 · 5 秒
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever">
+        <img src="docs/gallery/case-golden-retriever.jpg" width="280" alt="H3 Lite 金毛幼犬案例">
+      </a><br>
+      <strong>金毛幼犬醒来</strong><br>
+      分段提示 · 5 秒
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-starship-jump">
+        <img src="docs/gallery/case-starship-jump.jpg" width="280" alt="H3 Lite 星舰跃迁案例">
+      </a><br>
+      <strong>星舰跃迁</strong><br>
+      复杂时序与转场 · 8 秒
+    </td>
+  </tr>
+</table>
+
+MP4 放在 GitHub Release 的 `assets` 版本，仓库只保留海报和播放页；上传对应文件名后，点击海报即可播放。
+
 ## 快速开始
 
 把下面这句话发给 Codex 或 WorkBuddy：
@@ -192,15 +277,19 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 
 ▶️ [播放 / 下载星舰跃迁视频](assets/examples/h3lite-starship-jump.mp4)
 
-### 图生视频：拉面与家宴
+### 图生视频：恶搞之家式客厅换台
 
-下载或直接附上[拉面示例首帧](assets/examples/h3lite-i2va-ramen-first-frame.jpg)，并明确指定它为视频第一帧。
+下载或直接附上[示例首帧](assets/examples/h3lite-i2va-familyguy-first-frame.png)，并明确指定它为视频第一帧。这个案例使用原创角色和原创场景，保留美式成人动画的粗黑轮廓、平涂色彩与夸张表情，展示 I2VA 如何在保持人物、服装和客厅构图的同时推进连续动作。
 
-![H3 Lite I2VA 拉面示例首帧](assets/examples/h3lite-i2va-ramen-first-frame.jpg)
+![H3 Lite I2VA 恶搞之家式客厅示例首帧](assets/examples/h3lite-i2va-familyguy-first-frame.png)
+
+当前示例：`864×480 · 5 秒 · 8 步 · Set A 兼容路线 · 原生音频`。
 
 ```text
-请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 8 秒视频，并保持图片中的人物、拉面、餐桌和房间构图。镜头全程固定：开始时让前景的青花瓷拉面碗、叉烧、葱花和升腾的热气清晰可见，背景中的家人保持柔和虚化；随后平稳地把焦点从拉面转移到家人，拉面逐渐虚化，家人的笑容、夹菜和轻微交谈动作变得清晰，热气始终在前景飘动。保留汤汁轻微沸腾声、碗筷碰撞声和温暖的室内环境声，加入轻柔的原声吉他与古筝音乐，不要清晰对白。
+请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 5 秒横屏视频。保持原创美式成人动画风格、四位家庭成员、服装、客厅布局、电视位置、粗黑轮廓、平涂色彩和中广角固定构图。父亲突然前倾，用遥控器对着电视换台；母亲抱臂翻白眼；儿子和女儿转向父亲，露出夸张的不耐烦表情。电视光轻微闪烁，爆米花碗轻轻晃动；结尾父亲得意地指着电视，其他人一起盯着他。保留电视环境声、遥控器按键声、沙发摩擦声、爆米花碗轻响和短促的非语言反应，配轻快的情景喜剧音乐，不要清晰对白。
 ```
+
+▶️ [播放 / 下载恶搞之家式客厅 8 步视频](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
 
 ### Ref2VA：视频与声音参考
 
