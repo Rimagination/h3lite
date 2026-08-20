@@ -12,28 +12,26 @@
 
 <p align="center">中文 | <a href="README.en.md">English</a> | <a href="#参考资料">参考资料</a></p>
 
-`H3 Lite` 是给 Codex、WorkBuddy 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。你只需要描述想看的画面，Agent 就会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
-
-它面向第一次接触本地视频生成的用户：不必先学习 ComfyUI 节点，也不必自己判断模型、文本编码器、LoRA、双 VAE 和低显存参数怎样组合。
+`H3 Lite` 是给 Codex、WorkBuddy 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。描述想看的画面后，Agent 会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
 
 ## 模型定位与适用范围
 
-H3 Lite 主要面向 Windows 低显存 NVIDIA 显卡。默认使用经过剪枝与量化、并针对低显存适配的组件集，而不是需要大容量显存/统一内存的完整高配模型。典型 Set A 是 W4A8 剪枝扩散模型加 4B INT4 文本编码器，Set B 使用 4B FP8 文本编码器；目标是在消费级显卡上稳定生成，而不是追求满血模型的最高画质。
+H3 Lite 面向 Windows + NVIDIA + ComfyUI 的低显存本地视频生成。Set A 使用 W4A8 扩散模型和 4B INT4 文本编码器，Set B 使用 4B FP8 文本编码器；两套组件分别对应低显存快速路线和 FP8 兼容路线。
 
 当前已验证的主路线是 **Windows + NVIDIA + ComfyUI**：
 
 | 平台 | 支持状态 | 指导 |
 |---|---|---|
 | Windows + NVIDIA | 主支持路线 | 使用本仓库的 ComfyUI、doctor、planner 和 fastpath。 |
-| macOS Apple Silicon | 社区替代路线 | 可参考 MLX/Metal 的 `mmh3turbo`，但不是本 Skill 已验证的 ComfyUI 后端。 |
-| macOS Intel | 不建议 | 不承诺本地运行，建议使用托管/API 或其他后端。 |
-| Linux + NVIDIA | 实验性 | Windows 路径、节点包和耗时数据不能直接套用。 |
+| macOS Apple Silicon | 社区路线 | 可参考 MLX/Metal 的 `mmh3turbo`。 |
+| macOS Intel | 未验证 | 使用托管/API 或其他后端。 |
+| Linux + NVIDIA | 实验路线 | 需自行适配路径、节点和运行参数。 |
 
-Mac 用户不会被引导安装 CUDA 或 Windows 虚拟环境。若明确选择 Mac 社区路线，可参考[社区权重包](https://huggingface.co/yunfengwang/mmh3turbo-bundles)和 `uvx mmh3turbo`；其权重、许可证、更新和性能数据独立于 H3 Lite，不能与 ComfyUI 模型混用。
+Mac 社区路线可参考[社区权重包](https://huggingface.co/yunfengwang/mmh3turbo-bundles)和 `uvx mmh3turbo`，与本 Skill 的 ComfyUI 组件分开使用。
 
 ## 从需求到成片：四步工作流
 
-复杂视频先按“**意图路由 → 参考图锚点 → 提示词增强 → 生成与验收**”处理。这个工作流借鉴了公开 Agent Skill 的组织方式，但 H3 Lite 仍然只使用本地 ComfyUI，不调用 Higgsfield、MCP 或云端模型。
+复杂视频按“**意图路由 → 参考图锚点 → 提示词增强 → 生成与验收**”处理。
 
 | 你的目标 | 优先路线 | 关键做法 |
 |---|---|---|
@@ -42,29 +40,17 @@ Mac 用户不会被引导安装 CUDA 或 Windows 虚拟环境。若明确选择 
 | 指定首尾画面 | `FL2VA` | 描述两个锚点之间连续、可见的变化。 |
 | 多张图/视频/音频参考 | `Ref2VA` | 先定义每份素材的角色、保留项和可变项，再写分镜。 |
 
-人物或多镜头任务会先建立“锚点卡”：角色、服装、发型/花纹、道具、场景、光线、必须保持的内容、允许变化的内容，以及禁止漂移的内容。每个参考素材使用稳定名称（如 `Subject A`、`Picture 1`），并在提示词、输出文件夹和运行记录中保持一致。若 Ref2VA 的模型、文本编码器或工作流没有实际安装，Agent 不会把“有节点”当成“路线可用”，而是回退到分镜化 I2VA 或明确标记实验路线。
+人物或多镜头任务先建立锚点卡，固定角色、服装、道具、场景和光线，并为参考素材使用稳定名称，如 `Subject A`、`Picture 1`。若 Ref2VA 组件不完整，Agent 会改用 I2VA 或标记为实验路线。
 
-运行时会把这张锚点卡保存为每次任务目录中的 `anchors.json`，并在 `manifest.json` 记录其路径和摘要。生成完成后，`h3_status.py` 会在存在参考图或多镜头锚点时记录 `anchor_qa`：比较首/中/尾帧与参考图的像素连续性，并标记需要人工复核的身份、服饰和构图一致性。它是提示漂移的早期信号，不是人脸识别，也不会因为像素相似度偏低而代替人工判断或自动否定已通过的媒体技术验收。
+运行时会把锚点卡保存为 `anchors.json`，并在 `manifest.json` 记录路径。`anchor_qa` 用首/中/尾帧检查画面连续性，身份、服饰和构图仍需人工复核。
 
-提示词内部按五遍增强：意图一句话 → 可观察的角色/场景锁定 → 按播放顺序的动作与分镜 → 物理运镜和声音 → 少量防漂移约束。最终仍转换为 H3 所需的 `integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music` 字段；不要求用户自己填写 schema，也不会用堆砌“电影感”形容词代替具体动作。
+提示词按“意图 → 场景与角色 → 动作与分镜 → 运镜与声音 → 防漂移约束”增强，最后转换为 H3 的 `integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music` 字段。
 
-当描述比较模糊（例如“更电影感”“做一个好看的 3D 动画”）时，Agent 可选读取 [`references/prompt-assist.md`](references/prompt-assist.md)，参考 Higgsfield 公开模板把需求拆成稳定的风格/角色锁定、`SCENE`、`MOTION`、`AUDIO` 和少量 `NEGATIVE` 约束，再翻译回 H3 字段。它只是提示词写作辅助，不调用 Higgsfield，不复制其模型参数，也不会改变本地 Windows 低显存路线；如果联网不可用，就使用本地 H3 提示词参考继续工作。
-
-## 你能用它做什么
-
-| 路线 | 输入 | 适合场景 |
-|---|---|---|
-| T2VA | 文字提示 | 文生视频，保留 H3 原生声音 |
-| I2VA | 首帧图片 + 文字提示 | 从指定画面开始生成 |
-| FL2VA | 首帧 + 尾帧图片 + 文字提示 | 约束视频起点和终点 |
-| L2VA | 尾帧图片 + 文字提示 | 让视频收束到指定画面 |
-| Ref2VA | 多张图片、视频或音频参考 | 复用人物、风格、动作、镜头或声音；当前 fastpath 先提供实验性多图工作流 |
-
-T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动选择。当前 fastpath 也支持重复 `--ref-image` 自动选择实验性的 Ref2VA 工作流；实际运行前仍必须确认 `MiniMaxH3ReferenceToVideo`、匹配的 ClipProj/文本编码器和工作流已经加载。
+模糊需求可参考 [`references/prompt-assist.md`](references/prompt-assist.md) 补齐场景、动作、运镜和声音。
 
 ## 作品展示
 
-下面六条视频使用同一提示词、Set A 组件、LightX2V 4 步 LoRA、`640×352 / 124 帧 / 24 fps` 和原生音频，只改变加速节点组合。它们只作为本地视频生成的可运行下限和路线对照；提高分辨率、采样步数、LoRA 强度等参数后，画质仍可继续提升。点击海报进入原生视频播放页。
+下面六条视频使用同一提示词、Set A 组件和 `640×352 / 4 步 / 原生音频`，用于对比加速节点组合。点击海报播放。
 
 <table>
   <tr>
@@ -117,7 +103,7 @@ T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动�
 
 ### 既有生成案例
 
-之前的红球、金毛和星舰案例也统一放入展示页，分别对应动作验证、分段提示和复杂时序三类任务。
+红球、金毛和星舰案例覆盖动作验证、分段提示和复杂时序。
 
 <table>
   <tr>
@@ -145,7 +131,7 @@ T2VA、I2VA、FL2VA 和 L2VA 可由 fastpath 根据首帧、尾帧参数自动�
   </tr>
 </table>
 
-MP4 放在 GitHub Release 的 `assets` 版本，仓库只保留海报和播放页；上传对应文件名后，点击海报即可播放。
+展示页使用 GitHub Release 中的 MP4 和仓库内海报。
 
 ## 快速开始
 
@@ -162,30 +148,24 @@ https://github.com/Rimagination/h3lite
 请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
 ```
 
-“一分钟”只指把任务和安装位置交给 Agent；模型文件较大，首次下载时间取决于网络、硬盘和电脑配置。
-
-## 基本配置
-
-当前默认支持 **Windows + NVIDIA CUDA** 的本地低显存路线。已实测验证的下限是 **RTX 3060 Ti 8 GB 显存 + 16 GB 系统内存**；这只代表当前 W4A8 快速路线可以运行，不代表所有 8 GB 显卡都能得到相同结果。仍建议配 32 GB 系统内存和 SSD；12–16 GB 显存会更宽裕。
-
-6 GB 显存属于社区实验路线，建议配 32 GB 系统内存；低于 6 GB 显存或低于 16 GB 系统内存时，不建议下载和部署这套工作流。AMD/ROCm、RTX 50 系列新架构和原生 BF16 H3 不在当前默认验证范围内，Agent 会先做兼容性判断，不会仅凭显存容量承诺“能跑”。
+首次安装时间取决于模型大小、网络和硬盘速度。
 
 ## 硬件与路线选择
 
-GPU 型号、显存、笔记本功耗、系统内存、pagefile 和磁盘都会影响结果；“8 GB 显存”本身不是充分条件。
+主支持配置为 Windows + NVIDIA。显存、系统内存、pagefile、磁盘和笔记本功耗都会影响速度。
 
 | 已验证电脑 | GPU | 内存 | 路线 |
 |---|---|---|---|
 | 机械革命翼龙 15 Pro | RTX 4070 Laptop 8 GB | Ryzen 7 8845H / 32 GB | `LOW_VRAM`；Set A T2VA/I2VA，Set B 兼容 T2VA |
 | Windows 10 台式机 | RTX 4060 Ti 16 GB | i5-13400F / 32 GB | Set B；`NORMAL_VRAM`；T2VA/I2VA |
 
-同一套 Set B、兼容工作流、提示词、seed 和 `640×352 / 124 帧 / 4 步` 参数下，RTX 4060 Ti 16 GB 纯生成约 77.08 秒，RTX 4070 Laptop 8 GB 约 591.22 秒。这不是芯片跑分，而是常驻显存与动态卸载差异造成的实测参考。
+同一套 Set B、兼容工作流、提示词、seed 和 `640×352 / 4 步` 参数下，RTX 4060 Ti 16 GB 约 77.08 秒，RTX 4070 Laptop 8 GB 约 591.22 秒。
 
-默认从成功率最高的 `fast` 路线开始：4 步、原生音频、短视频和较小画布。基线跑通后，再提高分辨率、时长或采样步数。
+默认使用 `fast`：4 步、原生音频、640×352。需要更高画质时使用 `balanced`（6 步）或 `quality`（8 步）。
 
 ### 常见视频分辨率
 
-社区推荐使用 **32 的倍数**。VAE 的空间压缩和 DiT patch 对齐都需要这个约束；“720p”“1080p”只是便于理解的预设名称。不指定分辨率时，本 Skill 默认使用 **640×352**。
+分辨率使用 32 的倍数。不指定时默认 **640×352**；`864×480` 是 16:9、约 0.4 MP 的常用质量档。
 
 | 预设用途 | 实际分辨率 | MP |
 |---|---:|---:|
@@ -198,7 +178,7 @@ GPU 型号、显存、笔记本功耗、系统内存、pagefile 和磁盘都会�
 | 约 768p、16:9 | 1376×768 | 1.06 |
 | 约 1080p、16:9 | 1920×1056 | 2.03 |
 
-MP 为宽×高÷1,000,000，保留两位小数。高分辨率或多镜头任务建议先用低分辨率完整预览，确认构图、动作和提示词后再正式生成。
+高分辨率或多镜头任务先用低分辨率预览，再提升画布。
 
 ## 安装与组件
 
@@ -210,20 +190,20 @@ MP 为宽×高÷1,000,000，保留两位小数。高分辨率或多镜头任务�
 | 独立目录 | 如 `F:\MiniMax-H3\ComfyUI` | 推荐，避免占用系统盘或污染项目 |
 | 当前项目 | `<项目>\.h3lite\ComfyUI` | 环境随项目保存 |
 
-Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目录。
+下载前先确定 ComfyUI、模型、节点和输出目录。
 
 ### 只选择一套组件
 
-不要混用 Set A 与 Set B。百度网盘包已整理对应模型、节点、工作流和清单：
+Set A 与 Set B 各自包含匹配的模型、节点、工作流和清单，选择一套即可：
 
 | 组件集 | 已验证起点 | 分享链接 | 提取码 |
 |---|---|---|---|
 | Set A | RTX 4070 Laptop 8 GB + 32 GB，低显存快速路线 | [百度网盘](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
 | Set B | RTX 4060 Ti 16 GB + 32 GB，FP8 兼容路线；T2VA 也在 RTX 4070 Laptop 8 GB 上验证 | [百度网盘](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
 
-下载一个完整方案即可。将包内 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，导入工作流 JSON，并保留 `component-manifest.json`。百度网盘不可用时，按 [`references/component-sets.md`](references/component-sets.md) 的文件名、大小和哈希从上游来源下载。
+将包内 `models` 和 `custom_nodes` 合并到 `<ComfyUI>`，导入工作流 JSON，并保留 `component-manifest.json`。上游文件清单见 [`references/component-sets.md`](references/component-sets.md)。
 
-**Ref2VA 不需要单独的模型包。** bundled 多图 Ref2VA 工作流复用所选组件集中的 W4A8 扩散模型、4B 文本编码器、ClipProj、双 VAE 和 Turbo LoRA；只新增工作流入口和参考图绑定。若这些组件已经存在，Agent 应先复用并检查原生 `MiniMaxH3ReferenceToVideo` 节点，不要重复下载所谓的“Ref2VA checkpoint”。
+**Ref2VA 使用同一组件集。** 多图工作流复用 W4A8、文本编码器、ClipProj、双 VAE 和 Turbo LoRA。
 
 ### 手动安装 Skill
 
@@ -237,23 +217,25 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 请使用 H3 Lite，生成一个 5 秒横屏视频：一颗小型哑光红色橡胶球，在灰色混凝土地面上弹跳两次，然后向右滚出画面。低机位固定镜头，阴冷的多云日光，浅景深、35mm 电影质感；保留两次撞击地面的声音和滚动声，不配音乐。
 ```
 
-▶️ [播放 / 下载红球验证视频](assets/examples/h3lite-red-ball-and-plant.mp4)
+[![H3 Lite 红球弹跳视频封面](docs/gallery/case-red-ball.jpg)](assets/examples/h3lite-red-ball-and-plant.mp4)
 
-成功标准是：视频文件存在、画面有运动、动作次数大致正确、封装正常并包含原生声音。通过后再进入人物、复杂动作和更大画布。
+点击封面播放或下载视频。
+
+检查视频、动作、画面运动和原生声音，确认后再提高画布或复杂度。
 
 ## 提示词与案例
 
-短视频提示词可以按三部分组织：
+短视频提示词按三部分组织：
 
 1. **画面与氛围**：主体、环境、光线、景别和风格。
 2. **动作与镜头**：按播放顺序描述动作和运镜。
 3. **声音**：环境声、动作声、音乐或对白。
 
-“不要对白”只表示不说话；只有明确要求“完全静音”时才关闭音频。中文提示词不要只写一个很短的名词，建议补充主体特征、环境、景别、光线和动作，先以约 30–50 个汉字作为起点，再用低分辨率预览检查。
+“不要对白”保留环境声和动作声；“完全静音”才关闭音频。中文提示词补充主体、环境、镜头、光线和动作。
 
 ### 模糊需求的提示词辅助
 
-如果用户只给出风格词或一句松散想法，先补齐“观众最终要看到什么”，再确定一个可观察动作和一个主要运镜。例如“两个男生在海边，真实、电影感、镜头绕过去”可以明确为：两位人物的正/三分之四朝向、服饰和海岸线保持不变，镜头在平视高度缓慢顺时针环绕约 20°，保留海浪与风声，不凭空添加对白。参考网站的结构是为了减少歧义，不是让提示词堆更多形容词；完整模板和边界见 [`references/prompt-assist.md`](references/prompt-assist.md)。
+模糊需求先补齐主体、动作、运镜和声音；写作模板见 [`references/prompt-assist.md`](references/prompt-assist.md)。
 
 ### 分段提示：金毛幼犬醒来
 
@@ -265,7 +247,9 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 [2s-5s] 幼犬慢慢醒来，前爪向前伸展，打了个带着细小吱声的哈欠，然后坐起身，用明亮好奇的眼睛环顾四周，尾巴开始摇晃。
 ```
 
-▶️ [播放 / 下载金毛幼犬视频](assets/examples/h3lite-golden-retriever-puppy.mp4)
+[![H3 Lite 金毛幼犬视频封面](docs/gallery/case-golden-retriever.jpg)](assets/examples/h3lite-golden-retriever-puppy.mp4)
+
+点击封面播放或下载视频。
 
 ### 文生视频：星舰跃迁
 
@@ -275,7 +259,9 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 请使用 H3 Lite，生成一个 8 秒 16:9 视频：昏暗而宽阔的星舰舰桥内，一位短发女舰长背对镜头站在弧形观察窗前，窗外的深紫色星云中排列着庞大的黑色舰队。镜头先缓慢推近，舰队尾部的蓝色引擎逐渐增强；约 3.5 秒时切到舰长面部特写，舰队突然跃迁，强烈白光淹没舰桥，冲击使镜头剧烈震动，舰长踉跄后重新站稳。白光消退，窗外只剩空旷星云，她缓缓闭上眼睛。保留舰桥低沉嗡鸣、引擎蓄能声、跃迁爆响和金属震动声，配以逐渐增强的太空歌剧管弦乐。
 ```
 
-▶️ [播放 / 下载星舰跃迁视频](assets/examples/h3lite-starship-jump.mp4)
+[![H3 Lite 星舰跃迁视频封面](docs/gallery/case-starship-jump.jpg)](assets/examples/h3lite-starship-jump.mp4)
+
+点击封面播放或下载视频。
 
 ### 图生视频：恶搞之家式客厅换台
 
@@ -289,13 +275,15 @@ Agent 在下载大文件前应明确显示 ComfyUI、模型、节点和输出目
 请使用 H3 Lite，将我在这条消息中附上的图片作为视频 0 秒的第一帧，生成一个 5 秒横屏视频。保持原创美式成人动画风格、四位家庭成员、服装、客厅布局、电视位置、粗黑轮廓、平涂色彩和中广角固定构图。父亲突然前倾，用遥控器对着电视换台；母亲抱臂翻白眼；儿子和女儿转向父亲，露出夸张的不耐烦表情。电视光轻微闪烁，爆米花碗轻轻晃动；结尾父亲得意地指着电视，其他人一起盯着他。保留电视环境声、遥控器按键声、沙发摩擦声、爆米花碗轻响和短促的非语言反应，配轻快的情景喜剧音乐，不要清晰对白。
 ```
 
-▶️ [播放 / 下载恶搞之家式客厅 8 步视频](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
+[![H3 Lite 恶搞之家式客厅 8 步视频封面](assets/examples/h3lite-i2va-familyguy-first-frame.png)](assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4)
+
+点击封面播放或下载视频。
 
 ### Ref2VA：视频与声音参考
 
-下载 MiniMax 官方案例的[参考视频](assets/examples/minimax-official-ref2va-pink-suit-black-lamb.mp4)和[男声音色参考](assets/examples/minimax-official-ref2va-voice-reference.mp3)，再明确说明画面、动作、声音和对白分别参考哪份素材。Ref2VA 需要对应模型和工作流，不能只因为节点存在就认为路线可用。
+下载 MiniMax 官方案例的[参考视频](assets/examples/minimax-official-ref2va-pink-suit-black-lamb.mp4)和[男声音色参考](assets/examples/minimax-official-ref2va-voice-reference.mp3)，分别指定画面、动作、声音和对白的参考来源。
 
-对于多镜头任务，先用最小可用画布跑完整分镜，再提升目标分辨率。长任务保留每个镜头的完整日志，并在磁盘或 pagefile 不足时提前停止；不要把被 `grep` 过滤掉的输出当作成功。
+多镜头任务先用低分辨率跑完整分镜，再提升画布；长任务保留每个镜头的日志。
 
 ### Ref2VA：多张图片参考
 
@@ -314,35 +302,35 @@ python scripts/h3_fastpath.py `
   --json
 ```
 
-当前 Ref2VA 模板要求 ClipProj 编码器使用 `resident` 模式。它比 I2VA 更占显存，8 GB 显卡可能需要先用一张参考图或直接由 preflight 阻止；通过后再逐步增加参考图数量。完整的六段式提示词和角色分配见 [`references/prompt-writing.md`](references/prompt-writing.md) 与 [`references/agent-workflow.md`](references/agent-workflow.md)。
+当前 Ref2VA 模板使用 ClipProj `resident` 模式，显存占用高于 I2VA。提示词和角色分配见 [`references/prompt-writing.md`](references/prompt-writing.md) 与 [`references/agent-workflow.md`](references/agent-workflow.md)。
 
-底层 `MiniMaxH3ReferenceToVideo` 节点还支持参考视频和音频；本次 bundled fastpath 先把最稳定、最容易验收的多图入口做成 `--ref-image`，视频/音频素材仍可通过原生工作流接入。
+底层 `MiniMaxH3ReferenceToVideo` 也支持参考视频和音频，可通过原生工作流接入。
 
 ## 不打开网页也能看进度
 
-Windows 上运行 fastpath 时，H3 Lite 默认会弹出一个原生进度窗口：
+Windows 上运行 fastpath 时会弹出原生进度窗口，显示：
 
 - 显示排队、采样、解码、写入视频等阶段；
 - 直接读取 ComfyUI 原生 WebSocket 的步骤和节点进度；
 - 同时显示已用时间、预计剩余时间、显存、内存和 pagefile；
-- 生成完成后显示视频路径，可直接打开输出文件夹。
+- 输出路径和任务状态。
 
-新版 ComfyUI 会通过 `progress_state` 提供工作流节点状态，窗口会显示已完成节点、当前节点步骤和当前节点监测时长；轨道也按节点分段。默认窗口为 `760×620`，内容区带垂直滚动条，较小屏幕也能看到全部按钮。节点完成度是工作流结构进度，不等于耗时百分比；预计剩余时间使用经验耗时估计。没有可量化事件时，进度条保持静态并显示等待原因，不用动画伪装进展。这个本地窗口直接连接 ComfyUI，不需要浏览器或 MCP 中转。需要终端-only 运行时，加上 `--no-monitor-gui`。
+窗口读取 ComfyUI 的 WebSocket 节点进度，并显示节点阶段、采样步骤、耗时、ETA、显存、内存、pagefile 和输出路径。默认大小 `760×620`，内容区带滚动条。节点完成度是结构进度，ETA 使用实测耗时估计。终端-only 运行加 `--no-monitor-gui`。
 
-它不需要打开浏览器，关闭窗口也不会中断生成。也可以独立打开窗口，让它自动寻找当前新任务：
+窗口直接连接 ComfyUI，关闭窗口不会中断生成。也可以独立打开：
 
 ```powershell
 python scripts/h3_monitor_gui.py `
   --comfyui F:\MiniMax-H3\ComfyUI
 ```
 
-没有正在运行的任务时，窗口会显示等待状态；几天前遗留的 `running` 清单不会被当成当前任务。`--once --no-websocket` 可用于诊断 ComfyUI 和运行清单是否可读。
+没有任务时显示等待状态；`--once --no-websocket` 可用于诊断。
 
 ## 组件完整性与故障排查
 
-H3 Lite 把扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、工作流和节点版本视为一套组件，不会按文件名随意混搭。Set B 曾出现过“文件大小正确、内容损坏”的 W4A8 主模型，结果是彩色马赛克；首次使用或文件变化后会校验已登记的 SHA-256，并缓存结果。
+H3 Lite 将扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、工作流和节点版本作为一套组件管理。Set B 的关键文件首次使用或发生变化时校验 SHA-256，并缓存结果。
 
-遇到问题时，按这个顺序检查：磁盘/pagefile 和可用内存 → 模型或节点是否缺失 → 模型目录/文件名 → CUDA、PyTorch 和 custom node 兼容性 → OOM/CPU 卸载 → H3 音视频流程 → 提示词或参考素材对齐。灰屏或马赛克时，优先检查权重来源、VAE、sigma-shift 和可选注意力/缓存补丁。
+排查顺序：磁盘/pagefile → 模型和节点 → 模型路径/文件名 → CUDA/PyTorch/custom node → OOM/CPU 卸载 → H3 音视频流程 → 提示词和参考素材。灰屏或马赛克优先检查权重、VAE、sigma-shift 和可选补丁。
 
 ## 参考资料
 
@@ -350,10 +338,10 @@ H3 Lite 把扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、�
 - [MiniMax-H3 官方仓库](https://github.com/MiniMax-AI/MiniMax-H3)
 - [H3 prompt-writing skill](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing)
 - [Agent 工作流参考：路由、锚点、提示词增强与验收](references/agent-workflow.md)
-- [Higgsfield 公开 Agent Skills（仅作设计参考，不是运行依赖）](https://github.com/higgsfield-ai/skills)
-- [Higgsfield 提示词模板与生成器（仅作模糊需求的写作辅助）](references/prompt-assist.md)
-- [社区 Mac/Metal MLX 移植实录（参考，不代表 H3 Lite 已支持）](https://zhuanlan.zhihu.com/p/2069479566171812707)
-- [社区 Apple Silicon 本地部署排错实录（参考，不代表 Windows 资源来源）](https://mp.weixin.qq.com/s/hN60KLN7Pkpqb0pbk-r4WQ)
+- [Higgsfield 公开 Agent Skills（设计参考）](https://github.com/higgsfield-ai/skills)
+- [Higgsfield 提示词模板与生成器（提示词辅助）](references/prompt-assist.md)
+- [社区 Mac/Metal MLX 移植实录](https://zhuanlan.zhihu.com/p/2069479566171812707)
+- [社区 Apple Silicon 本地部署排错实录](https://mp.weixin.qq.com/s/hN60KLN7Pkpqb0pbk-r4WQ)
 - [完整组件集与校验值](references/component-sets.md)
 - [硬件、分辨率与部署矩阵](references/deployment-matrix.md)
 
