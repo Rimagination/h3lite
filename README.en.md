@@ -53,28 +53,9 @@ The difference mainly comes from resident VRAM versus dynamic system-memory offl
 
 Start with `fast`: four steps, native audio, and 640×352. Use `balanced` for six steps or `quality` for eight steps.
 
-## From brief to verified clip
+### Set A route comparison
 
-For complex requests, H3 Lite follows: **intent route → reference/identity anchors → prompt enhancement → generation and verification**.
-
-| Goal or input | Preferred route | Key decision |
-|---|---|---|
-| Text describes the whole clip | `T2VA` | Establish the opening state, then write the audiovisual timeline. |
-| A specific opening image is supplied | `I2VA` | Anchor it at `0.00s` and describe forward motion only. |
-| Both endpoints are supplied | `FL2VA` | Describe a physically continuous path between the anchors. |
-| Several image/video/audio references are supplied | `Ref2VA` | Define each reference role, retention, allowed change, and forbidden drift first. |
-
-For characters or multi-shot work, the agent builds an anchor sheet for subjects, wardrobe, props, scene, lighting, and permitted changes. The same labels are reused in the prompt and run manifest. Incomplete Ref2VA components route the task to I2VA or an experimental workflow.
-
-The sheet is saved as `anchors.json`; `manifest.json` stores its path. `anchor_qa` compares first/middle/last frames with the references for continuity review.
-
-Prompt enhancement follows: intent → identity and scene → ordered action → camera and sound → drift constraints. The result is translated into H3's required fields.
-
-For vague briefs, use [`references/prompt-assist.md`](references/prompt-assist.md) to fill in scene, action, camera, and sound.
-
-## Showcase
-
-These six clips use the same prompt, Set A components, and `640×352 / 4 steps / native audio`; only the acceleration-node combination changes. Click a poster to play.
+These six clips use the same prompt, Set A components, and `640×352 / 4 steps / native audio`; only the acceleration-node combination changes. Click a poster to open the player.
 
 <table>
   <tr>
@@ -125,37 +106,26 @@ These six clips use the same prompt, Set A components, and `640×352 / 4 steps /
   </tr>
 </table>
 
-### Existing generated cases
+The player uses GitHub Pages, MP4 files under `docs/videos/`, and repository posters. The `assets` Release remains available as a download backup.
 
-The red-ball, golden-retriever, and starship cases cover action validation, timeline prompting, and complex timing.
+## From brief to verified clip
 
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball">
-        <img src="docs/gallery/case-red-ball.jpg" width="280" alt="H3 Lite red-ball example">
-      </a><br>
-      <strong>Bouncing red ball</strong><br>
-      Action and audio validation · 5 sec
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever">
-        <img src="docs/gallery/case-golden-retriever.jpg" width="280" alt="H3 Lite golden-retriever example">
-      </a><br>
-      <strong>Golden retriever wakes</strong><br>
-      Timeline prompt · 5 sec
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-starship-jump">
-        <img src="docs/gallery/case-starship-jump.jpg" width="280" alt="H3 Lite starship-jump example">
-      </a><br>
-      <strong>Starship jump</strong><br>
-      Complex timing and transitions · 8 sec
-    </td>
-  </tr>
-</table>
+For complex requests, H3 Lite follows: **intent route → reference/identity anchors → prompt enhancement → generation and verification**.
 
-The showcase uses the GitHub Pages player, MP4 files under `docs/videos/`, and repository posters. The `assets` Release remains available as a download backup.
+| Goal or input | Preferred route | Key decision |
+|---|---|---|
+| Text describes the whole clip | `T2VA` | Establish the opening state, then write the audiovisual timeline. |
+| A specific opening image is supplied | `I2VA` | Anchor it at `0.00s` and describe forward motion only. |
+| Both endpoints are supplied | `FL2VA` | Describe a physically continuous path between the anchors. |
+| Several image/video/audio references are supplied | `Ref2VA` | Define each reference role, retention, allowed change, and forbidden drift first. |
+
+For characters or multi-shot work, the agent builds an anchor sheet for subjects, wardrobe, props, scene, lighting, and permitted changes. The same labels are reused in the prompt and run manifest. Incomplete Ref2VA components route the task to I2VA or an experimental workflow.
+
+The sheet is saved as `anchors.json`; `manifest.json` stores its path. `anchor_qa` compares first/middle/last frames with the references for continuity review.
+
+Prompt enhancement follows: intent → identity and scene → ordered action → camera and sound → drift constraints. The result is translated into H3's required fields.
+
+For vague briefs, use [`references/prompt-assist.md`](references/prompt-assist.md) to fill in scene, action, camera, and sound.
 
 ## Quick validation: bouncing red ball
 
