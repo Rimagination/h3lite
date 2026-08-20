@@ -48,9 +48,39 @@ Mac 社区路线可参考[社区权重包](https://huggingface.co/yunfengwang/mm
 
 模糊需求可参考 [`references/prompt-assist.md`](references/prompt-assist.md) 补齐场景、动作、运镜和声音。
 
-## 作品展示
+## 快速开始
 
-下面六条视频使用同一提示词、Set A 组件和 `640×352 / 4 步 / 原生音频`，用于对比加速节点组合。点击海报播放。
+把下面这句话发给 Codex 或 WorkBuddy：
+
+```text
+请帮我安装 H3 Lite，并根据我的电脑配置准备本地 MiniMax H3 视频生成环境：
+https://github.com/Rimagination/h3lite
+```
+
+如果不想占用系统盘，把目标位置写进同一条消息：
+
+```text
+请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
+```
+
+首次安装时间取决于模型大小、网络和硬盘速度。
+
+## 硬件与路线选择
+
+主支持配置为 Windows + NVIDIA。显存、系统内存、pagefile、磁盘和笔记本功耗都会影响速度。
+
+| 已验证电脑 | GPU | 内存 | 路线 |
+|---|---|---|---|
+| 机械革命翼龙 15 Pro | RTX 4070 Laptop 8 GB | Ryzen 7 8845H / 32 GB | `LOW_VRAM`；Set A T2VA/I2VA，Set B 兼容 T2VA |
+| Windows 10 台式机 | RTX 4060 Ti 16 GB | i5-13400F / 32 GB | Set B；`NORMAL_VRAM`；T2VA/I2VA |
+
+同一套 Set B、兼容工作流、提示词、seed 和 `640×352 / 4 步` 参数下，RTX 4060 Ti 16 GB 约 77.08 秒，RTX 4070 Laptop 8 GB 约 591.22 秒。
+
+默认使用 `fast`：4 步、原生音频、640×352。需要更高画质时使用 `balanced`（6 步）或 `quality`（8 步）。
+
+### Set A 路线对比
+
+下面六条视频使用同一提示词、Set A 组件和 `640×352 / 4 步 / 原生音频`，只改变加速节点组合。点击海报打开播放器。
 
 <table>
   <tr>
@@ -101,67 +131,7 @@ Mac 社区路线可参考[社区权重包](https://huggingface.co/yunfengwang/mm
   </tr>
 </table>
 
-### 既有生成案例
-
-红球、金毛和星舰案例覆盖动作验证、分段提示和复杂时序。
-
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball">
-        <img src="docs/gallery/case-red-ball.jpg" width="280" alt="H3 Lite 红球弹跳案例">
-      </a><br>
-      <strong>红球弹跳</strong><br>
-      动作与声音验证 · 5 秒
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever">
-        <img src="docs/gallery/case-golden-retriever.jpg" width="280" alt="H3 Lite 金毛幼犬案例">
-      </a><br>
-      <strong>金毛幼犬醒来</strong><br>
-      分段提示 · 5 秒
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-starship-jump">
-        <img src="docs/gallery/case-starship-jump.jpg" width="280" alt="H3 Lite 星舰跃迁案例">
-      </a><br>
-      <strong>星舰跃迁</strong><br>
-      复杂时序与转场 · 8 秒
-    </td>
-  </tr>
-</table>
-
 展示页使用 GitHub Pages 播放器、`docs/videos/` 中的 MP4 和仓库内海报；`assets` Release 提供下载备份。
-
-## 快速开始
-
-把下面这句话发给 Codex 或 WorkBuddy：
-
-```text
-请帮我安装 H3 Lite，并根据我的电脑配置准备本地 MiniMax H3 视频生成环境：
-https://github.com/Rimagination/h3lite
-```
-
-如果不想占用系统盘，把目标位置写进同一条消息：
-
-```text
-请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
-```
-
-首次安装时间取决于模型大小、网络和硬盘速度。
-
-## 硬件与路线选择
-
-主支持配置为 Windows + NVIDIA。显存、系统内存、pagefile、磁盘和笔记本功耗都会影响速度。
-
-| 已验证电脑 | GPU | 内存 | 路线 |
-|---|---|---|---|
-| 机械革命翼龙 15 Pro | RTX 4070 Laptop 8 GB | Ryzen 7 8845H / 32 GB | `LOW_VRAM`；Set A T2VA/I2VA，Set B 兼容 T2VA |
-| Windows 10 台式机 | RTX 4060 Ti 16 GB | i5-13400F / 32 GB | Set B；`NORMAL_VRAM`；T2VA/I2VA |
-
-同一套 Set B、兼容工作流、提示词、seed 和 `640×352 / 4 步` 参数下，RTX 4060 Ti 16 GB 约 77.08 秒，RTX 4070 Laptop 8 GB 约 591.22 秒。
-
-默认使用 `fast`：4 步、原生音频、640×352。需要更高画质时使用 `balanced`（6 步）或 `quality`（8 步）。
 
 ### 常见视频分辨率
 
