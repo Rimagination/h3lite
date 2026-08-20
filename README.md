@@ -131,7 +131,7 @@ Mac 社区路线可参考[社区权重包](https://huggingface.co/yunfengwang/mm
   </tr>
 </table>
 
-展示页使用 GitHub Release 中的 MP4 和仓库内海报。
+展示页使用 GitHub Pages 播放器、`docs/videos/` 中的 MP4 和仓库内海报；`assets` Release 提供下载备份。
 
 ## 快速开始
 

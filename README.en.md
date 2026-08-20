@@ -155,7 +155,7 @@ The red-ball, golden-retriever, and starship cases cover action validation, time
   </tr>
 </table>
 
-The showcase uses MP4 files from the GitHub Release tagged `assets` and posters from the repository.
+The showcase uses the GitHub Pages player, MP4 files under `docs/videos/`, and repository posters. The `assets` Release remains available as a download backup.
 
 ## Quick validation: bouncing red ball
 

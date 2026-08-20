@@ -29,6 +29,7 @@ output/
 !assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4
 !docs/gallery/case-familyguy.png
 !docs/gallery/*.jpg
+!docs/videos/*.mp4
 *.safetensors
 *.ckpt
 *.pt
