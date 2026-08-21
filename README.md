@@ -320,3 +320,14 @@ H3 Lite 将扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、�
 ## License
 
 H3 Lite 使用 MIT License。MiniMax 模型权重、ComfyUI、第三方 custom nodes 和上游资料分别遵循各自许可证。
+
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=Rimagination%2Fh3lite&type=date&legend=top-left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Rimagination/h3lite&type=date&theme=dark&legend=top-left&sealed_token=L1cw0r2cFn_phgsnAI4vWbtrjdwyUnD8A1YjB66U2XpGCBTElNfLa3mYwRZ65TZTSWOeP2ZY1S-qWGJo7NqLFUmt9p6sk6Cxmd2awkzlIlEfOUO7znlZEw" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Rimagination/h3lite&type=date&legend=top-left&sealed_token=L1cw0r2cFn_phgsnAI4vWbtrjdwyUnD8A1YjB66U2XpGCBTElNfLa3mYwRZ65TZTSWOeP2ZY1S-qWGJo7NqLFUmt9p6sk6Cxmd2awkzlIlEfOUO7znlZEw" />
+    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Rimagination/h3lite&type=date&legend=top-left&sealed_token=L1cw0r2cFn_phgsnAI4vWbtrjdwyUnD8A1YjB66U2XpGCBTElNfLa3mYwRZ65TZTSWOeP2ZY1S-qWGJo7NqLFUmt9p6sk6Cxmd2awkzlIlEfOUO7znlZEw" />
+  </picture>
+</a>
