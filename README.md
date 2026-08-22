@@ -326,7 +326,7 @@ H3 Lite 使用 MIT License。MiniMax 模型权重、ComfyUI、第三方 custom n
 
 <p align="center">
   <a href="https://www.star-history.com/?repos=Rimagination%2Fh3lite&type=date&legend=top-left">
-    <img alt="Star History Chart" src="h3lite-star-history.png" width="600" />
+    <img alt="Star History Chart" src="h3lite-star-history-final.png" width="600" />
   </a>
 </p>
 
