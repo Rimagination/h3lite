@@ -666,51 +666,43 @@ For black/mosaic output, restore the official H3 flow/sigma-shift node and simpl
 
 Super-resolution is post-processing, not another H3 generation pass: it never
 changes the generation graph, adds sampling steps, or silently follows a run.
-Add it only when the user explicitly asks for a target beyond the local canvas
-(roughly 0.5 MP, e.g. 1080p/4K), and never promise pixel-exact consumer labels
-("1080p") as model output sizes. Read
+The registered low-VRAM route has been validated around 0.5 MP (for example,
+960x544), but that is not a model-wide H3 limit. Official/native H3 workflows
+support larger canvases; use the doctor, planner, and preflight result as the
+source of truth for the selected local canvas. Add upscale only when the user
+explicitly asks for a target beyond that selected canvas, and never promise
+pixel-exact consumer labels ("1080p") as model output sizes. Read
 [`references/video-upscale.md`](references/video-upscale.md) for the routes,
-the measured Topaz command form, model availability, and the problem table.
+portable path discovery, measured case studies, and the problem table.
 
 Rules:
 
-- **Primary route (local machine): Topaz Video AI.** The user selects the
-  enhancement model (Starlight/Astra Fast for H3-style clips, Proteus/Rhea for
-  general footage), the output scale, and exports from the GUI. The runtime
-  runs `neuroserver --once ... --filters [{"model": "astrafast"}]`; the exact
-  command form is recorded in logs (`EventTracker: Video Export Started`)
-  for diagnosis only — there is no official CLI contract, so do not tell the
-  agent to script Topaz.
-- **Pre-export checks:** free VRAM and competitors (`scripts/h3_vram.py
-  --json`, stop only after an idle `/queue`), model presence (Astra HQ/Sharp
-  and Starlight Mini are *not installed*), no stale Topaz worker processes
-  before a repair run, and non-recorrupted model zips (SHA-512 vs catalog
-  `zipHash`).
+- **Primary route (when actually installed): Topaz Video AI.** The user selects
+  the enhancement model (Starlight/Astra Fast for H3-style clips, Proteus/Rhea
+  for general footage), the output scale, and exports from the GUI. Do not
+  assume a Topaz install, model list, or path copied from another machine.
+  Topaz has no stable public CLI contract; log command lines are diagnostic
+  evidence only, never a scriptable runtime dependency.
+- **Pre-export checks:** discover the actual Topaz/model roots, inspect free
+  VRAM with `scripts/h3_vram.py --json`, and confirm any competitor is idle.
+  Treat model presence and SHA-512 catalog checks as machine-local facts; do
+  not state that a model is installed or missing without checking this machine.
 - **During export:** do not start another heavy CUDA job (no H3 generation on
   the same card); a 2x Starlight export of a ~210-frame clip takes on the
   order of 20 minutes at 0.3 fps while decoding.
 - **After export:** ffprobe must show the expected size, 24 fps, an audio
   stream, and near-original duration; the `videoai=Enhanced using ...`
   metadata tag marks an already-enhanced file — do not upscale it again.
-- **Fallbacks (scriptable, offline):** FlashVSR CLI first — a standalone
-  install at `E:\FlashVSR` with its own Python env and the FlashVSR-v1.1
-  model pack, driven by `cli_main.py` (`--mode tiny|tiny-long|full`,
-  `--scale 2|4`, `--frame_chunk_size`, `--tile_size`/`--tile_overlap`,
-  `--keep_models_on_cpu`). `run_flashvsr_best.bat` holds the validated
-  recipe: `--tiled_dit --tiled_vae --tile_size 256 --tile_overlap 64
-  --frame_chunk_size 50 --keep_models_on_cpu` — measured clean (2:58 for an
-  8-frame slice; steady state 0.14 fps, ~7 s/frame, so ~55-60 min for a
-  479-frame clip — same speed as the gridded old combo), while the old
-  bat's 128/24 combo leaves grid seams and the untiled full-frame path
-  is impractically slow (>4 min/frame, killed after 25 min on 8 frames). The CLI output is
-  video-only (measured: input AAC dropped) — remux the source audio track
-  with ffmpeg afterward. Verify `nb_frames`
-  equals the input frame count: a truncated output (e.g. 100 of 479 frames)
-  is a broken run, not a quality verdict. See the reference for the full
-  case. Then the ComfyUI venv + 4x-UltraSharp (weight present with recorded
-  SHA-256; tile to control VRAM, remux audio), and plain ffmpeg
-  `lanczos + unsharp` for quick previews. Watch the 0-byte weight trap: a
-  filename can be right while the file contains nothing.
+- **Fallbacks (scriptable, offline):** use FlashVSR only after discovering
+  <FlashVSR_ROOT>, its environment, the exact CLI fork/commit, and the model
+  pack. Invoke the script by absolute path, for example
+  <FlashVSR_ROOT>\ComfyUI-FlashVSR_Stable\cli_main.py; a bare
+  `cli_main.py` depends on the current working directory and is not portable.
+  Preserve the validated tiling/chunking settings from the local reference,
+  verify frame count and audio after export, and treat truncated output as a
+  failed run. If FlashVSR is absent, use the discovered ComfyUI venv plus a
+  verified 4x-UltraSharp weight, or plain ffmpeg for previews. Never invent a
+  missing wrapper, model, venv, or path.
 
 ## GPU memory contention with other heavy CUDA apps
 
@@ -726,14 +718,25 @@ Rules:
 
 - When preflight flags a meaningful competitor or a fragile job fails at
   allocation, run `python scripts/h3_vram.py --json` to see who holds the
-  VRAM; `nvidia-smi` totals alone never identify the hog.
+  VRAM. Read the reported process scope and WDDM LUIDs; do not treat a
+  process row from an unmapped adapter as proof that it competes for the
+  selected CUDA GPU.
 - Confirm the competitor is idle before touching it. For ComfyUI, check
   `http://127.0.0.1:8188/queue` (running + pending empty), and remember an
   empty queue does not release resident models: the process still shows
   several GB until ComfyUI restarts or offloads.
 - Never stop a ComfyUI that has queued or running items; losing a run wastes
   the whole generation.
-- Gate fragile submissions with `python scripts/h3_vram.py --check-free-gb 5`.
+- Gate only after the report shows a comparable adapter scope. The
+  `--check-free-gb` command fails closed with exit code 2 when the
+  scope is unknown; choose the threshold from the selected workload and
+  hardware rather than assuming 5 GB. Use `--allow-scope-mismatch`
+  only when the user explicitly accepts a global `nvidia-smi`-only
+  check.
+- A destructive stop requires `--confirm-stop` and the exact
+  `--process-name` from the report. For ComfyUI also pass
+  `--queue-url`; the helper refuses to stop when the queue cannot be
+  read or is non-empty.
 - Read `references/gpu-contention.md` for the measured case (ComfyUI holding
   9,805 MB resident on a 16 GB card while a Topaz Video AI Starlight export
   failed at a 28 MiB VAE allocation) and the diagnostic commands.
@@ -748,7 +751,7 @@ Rules:
 - `references/prompt-assist.md`: optional Higgsfield-inspired prompt-pattern lookup for vague creative briefs; maps style/scene/motion/audio/negative cards back to H3 fields without adding a cloud dependency.
 - `references/face-quality.md`: face-first routing, official Ref2VA identity controls, low-VRAM trade-offs, and the limits of dynamic/color QA.
 - `references/gpu-contention.md`: Windows/WDDM VRAM contention between ComfyUI and other heavy CUDA apps; per-process memory via the GPU Process Memory counter, idle-queue checks, the stop/restart order, and a measured 16 GB case plus a Topaz Video AI repair appendix.
-- `references/video-upscale.md`: post-process video upscale routes (Topaz Video AI primary, FlashVSR CLI at `E:\FlashVSR` as the scripted backup — run command, model pack, VRAM tier table, the measured tiled-seam grid case and fix, frame-count truncation check), 4x-UltraSharp via the ComfyUI venv, plain ffmpeg fallback), the measured Topaz export command form and lifecycle, installed/missing model list, and the problem/consequence table for contention, corrupt weights, audio, and frame-rate pitfalls.
+- `references/video-upscale.md`: post-process video upscale routes (Topaz Video AI primary, a discovered/pinned FlashVSR CLI root as the scripted backup — run command, model pack, VRAM tier table, the measured tiled-seam grid case and fix, frame-count truncation check), 4x-UltraSharp via the discovered ComfyUI venv, plain ffmpeg fallback, and the problem/consequence table for contention, corrupt weights, audio, and frame-rate pitfalls.
 - `assets/h3_w4a8_t2v_api.json`: reusable low-VRAM T2VA API graph based on the validated W4A8/4B/audio route.
 - `assets/h3_w4a8_t2v_compat_api.json`: core T2VA graph without optional Sol Attention, Chunk Feed Forward, or T8 Block Cache nodes.
 - `assets/h3_w4a8_i2v_api.json`: reusable low-VRAM I2VA graph with native first-frame input and optional acceleration patches.
@@ -765,7 +768,7 @@ Rules:
 - `scripts/h3_monitor_gui.py`: native Windows Tkinter progress window for live queue/sampling/resource/output visibility; it does not replace ComfyUI or interrupt a run.
 - `scripts/h3_paths.py`: Windows path normalization for `F:/...` and Git Bash `/f/...` inputs.
 - `scripts/h3_cleanup.py`: dry-run-first maintenance for old timestamped run snapshots; preserves environment state and recent runs.
-- `scripts/h3_vram.py`: read-only Windows per-process dedicated-VRAM report (WDDM counter with `--query-compute-apps` fallback) and a free-VRAM gate; optional destructive `--stop <pid>` for a confirmed-idle hog.
+- `scripts/h3_vram.py`: read-only Windows per-process dedicated-VRAM report (preserving WDDM adapter LUIDs, with `--query-compute-apps` fallback), scope-aware free-VRAM gate, and guarded destructive stop requiring an exact process name, explicit confirmation, and optional queue check.
 
 ## Sources
 

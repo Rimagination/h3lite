@@ -12,14 +12,16 @@
 ## 诊断命令
 
 ```powershell
-# 1) GPU 总量 + 每个进程的真实专用显存（读 WDDM 计数器，含回退）
+# 1) GPU 总量 + 带适配器范围的进程专用显存（读 WDDM 计数器，含回退）
 python scripts/h3_vram.py --json
 
-# 2) 作为门禁：空闲显存低于阈值时退出码为 1
-python scripts/h3_vram.py --check-free-gb 5; echo $LASTEXITCODE
+# 2) 作为门禁：空闲显存低于阈值时退出码为 1；范围不可比时退出码为 2
+python scripts/h3_vram.py --check-free-gb <threshold-gb>; echo $LASTEXITCODE
 ```
 
-`h3_vram.py` 通过一次 PowerShell 调用读取 `\GPU Process Memory(*)\Dedicated Usage` 计数器（注意 `Get-Counter` 必须带前导反斜杠，否则报 “The specified counter path could not be interpreted”），按 PID 汇总后与 `nvidia-smi` 总量配对输出。计数器不可用时回退到 `--query-compute-apps`。
+`h3_vram.py` 通过一次 PowerShell 调用读取 `\GPU Process Memory(*)\Dedicated Usage` 计数器（注意 `Get-Counter` 必须带前导反斜杠，否则报 “The specified counter path could not be interpreted”），按 PID、WDDM LUID 和物理适配器保留进程范围，再与 `nvidia-smi` 的 GPU 总量配对输出。计数器不可用时回退到 `--query-compute-apps`；回退数据不应伪装成 WDDM 的逐进程精确映射。
+
+如果报告出现多个 WDDM LUID、进程总量明显超过目标 GPU 的 `nvidia-smi` 已用量，或无法确定映射，说明范围不可比：`--check-free-gb` 会安全失败并返回 2。只有用户明确接受全局 `nvidia-smi` 近似检查时，才使用 `--allow-scope-mismatch`，且不要把这个覆盖开关作为自动化默认值。
 
 核对竞态方是否真的空闲：ComfyUI 检查自己的队列：
 
@@ -31,14 +33,14 @@ Invoke-RestMethod http://127.0.0.1:8188/queue | ConvertTo-Json | Select-String -
 
 ## 处理顺序
 
-1. 跑 `h3_vram.py --json`，确认占用者的 PID、进程名和 MB。
+1. 跑 `h3_vram.py --json`，确认目标 GPU、占用者的 PID、进程名、MB、WDDM LUID 和报告范围。
 2. 确认竞态方空闲：没有正在运行/排队中的任务；需要的话先等它的任务完成。
 3. 释放显存：正常退出，或
-   `python scripts/h3_vram.py --stop <pid>`（破坏性操作；禁止用于仍有排队或运行中任务的 ComfyUI）。
+   `python scripts/h3_vram.py --stop <pid> --process-name <exact-name> --queue-url http://127.0.0.1:8188/queue --confirm-stop`（破坏性操作；必须是报告中的精确进程名，队列不可读或非空时会拒绝；非 ComfyUI 目标只有在已独立确认空闲后才省略 `--queue-url`）。
 4. 重跑被阻塞的任务；成功后按需重启之前的 CUDA 程序（H3 生成时 ComfyUI 本身就是宿主，不需要重启自己）。
 5. 如果争用经常发生：给常驻方上资源限制（如 ComfyUI `--lowvram`），或在脚本里先 `--check-free-gb` 再提交。
 
-## 实测案例（2026-08-23，RTX 4060 Ti 16 GB，驱动 610.88）
+## 实测案例（2026-08-23，RTX 4060 Ti 16 GB，驱动 610.88；仅作案例）
 
 ComfyUI 后端（`python.exe main.py --listen 127.0.0.1 --port 8188`）在**空队列**下常驻显存 9,805 MB；同一个 16 GB 显卡上 Topaz Video AI 导出星光 Starlight Fast 2 模型时：
 
@@ -54,5 +56,5 @@ ComfyUI 后端（`python.exe main.py --listen 127.0.0.1 --port 8188`）在**空�
 
 - **模型反复下载/卡在 “Finalizing model download…”：** Windows 区域为 zh-CN 时国际化资源缺失，QML 缓存按中文重新生成后版本检查失败。修复：临时切到 en-US 区域，删除 `%AppData%\Topaz Labs LLC\Topaz Video\qmlcache` 及其 qml/本机缓存文件，重启应用生成英文缓存后再恢复区域设置。
 - **显存上限：** 应用内最大内存使用率由 100% 调为 60%（导出命令行实测收到 `--max-gpu-mem 9`）。注意：该设置由 Topaz UI/配置传递，`HKCU\Software\Topaz Labs LLC\Topaz Video` 下并不存在 `maxMemoryUsage` 键，不要按注册表键名去找它。环境变量 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`（仅对 PyTorch 用户进程有效）。
-- **模型包完整性：** `C:\ProgramData\Topaz Labs LLC\Topaz Video\models\astrafast.json` 的 `validate_install.windows.model.zipHash`（SHA-512）与本地 `astrafast-1.0.zip`（6,439,256,676 字节，4 个 blob）比对，下载恢复后校验通过，目录校验 `numFiles: 4`。
+- **模型包完整性：** 用当前机器的 `<TopazModelRoot>\...\astrafast.json` 中的 `validate_install.windows.model.zipHash`（SHA-512）与本地 zip 比对；下载恢复后还要按当前清单核对字节数和文件数。
 - **“修复程序没关干净”：** 部分进程为 UWP/后台驻留，需任务管理器或 `taskkill` 全部 `Topaz Video*`/`neuroserver*` 进程后再运行修复程序。

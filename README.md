@@ -306,13 +306,13 @@ H3 Lite 将扩散模型、文本编码器、ClipProj、Turbo LoRA、双 VAE、�
 
 ### 同机其他 CUDA 程序抢占显存
 
-ComfyUI 队列清空后仍可能让模型常驻显存；Windows WDDM 驱动下 `nvidia-smi --query-compute-apps` 查不到单进程占用，CUDA 会在“看似 8 GB 空闲”时连几 MiB 的分配都失败，甚至直接访问违例（退出码 0xC0000005）而不是报 OOM。诊断用 `python scripts/h3_vram.py --json` 查看每个进程的真实专用显存（读 WDDM 计数器，`nvidia-smi` 总量只有全局值），`--check-free-gb 5` 作门禁；确认对方的队列空闲后才能停止它，空队列不等于模型已释放。详见 [references/gpu-contention.md](references/gpu-contention.md)（含 ComfyUI 常驻 9.8 GB 拖垮 Topaz Video AI 导出的实测案例与处理顺序）。
+ComfyUI 队列清空后仍可能让模型常驻显存；Windows WDDM 驱动下 `nvidia-smi --query-compute-apps` 查不到单进程占用，CUDA 会在“看似空闲”时连几 MiB 的分配都失败，甚至直接访问违例（退出码 0xC0000005）而不是报 OOM。诊断用 `python scripts/h3_vram.py --json` 查看进程显存、WDDM LUID 和适配器范围；不要把不同适配器的 WDDM 计数器直接当成同一张 CUDA 卡的占用。提交脆弱任务前，用 `--check-free-gb <阈值>` 作门禁；范围无法比较时脚本返回 2，只有明确接受全局 `nvidia-smi` 检查时才加 `--allow-scope-mismatch`。确认对方的队列空闲后才能停止它，空队列不等于模型已释放。详见 [references/gpu-contention.md](references/gpu-contention.md)。
 
 ## 视频超分（后处理，Topaz 主推）
 
-本地 H3 画布上限约 0.5 MP，要 1080p/4K 时不要把“放大”交给重新生成——超分是明确的、用户主动请求的后处理步骤，不改变生成图。主推路线是已装的 Topaz Video AI：打开视频 → 选 Starlight/Astra Fast（或 Proteus/Rhea）→ 选输出倍率（实测常见 1.125x→1296x720、2x→2304x1280）→ 导出；音频由顶层封装（cleanupPass）原样保留。导出前用 `scripts/h3_vram.py --json` 确认显存空闲（停止 ComfyUI 前先确认 `/queue` 为空），注意 Astra HQ/Astra Sharp/Starlight Mini 本机未安装，以及 0 字节权重陷阱——文件名对不代表文件完整。导出后看 `videoai=Enhanced using ...` 元数据，不要对已增强视频再次超分。
+本仓库的低显存 H3 路线已验证约 0.5 MP（960x544），这不是模型或所有硬件的全局上限；需要 1080p/4K 时不要把“放大”交给重新生成——超分是明确的、用户主动请求的后处理步骤，不改变生成图。若本机已安装并授权 Topaz Video AI，可按 GUI 中实际可用的 Starlight/Astra Fast、Proteus 或 Rhea 路线处理；不要假设模型名称、安装目录或授权状态。导出前用 `scripts/h3_vram.py --json` 确认目标适配器范围和显存，再确认 ComfyUI 的 `/queue` 为空；文件名对不代表权重完整。导出后校验视频、音频、帧数和 `videoai=Enhanced using ...` 元数据，不要对已增强视频再次超分。
 
-备选（可脚本化、离线）：首选本机已装的 FlashVSR CLI（`E:\FlashVSR`，含自带 Python 环境与 FlashVSR-v1.1 模型包）。旧 `run_flashvsr.bat` 内置 `--tiled_dit --tiled_vae --tile_size 128`（overlap 默认 24）——这是本机实测网格伪影的根源；修正是 `run_flashvsr_best.bat` 的 256/64 组合（`--tile_size 256 --tile_overlap 64 --frame_chunk_size 50 --keep_models_on_cpu`）：8 帧切片实测 2:58 完成且抽帧无网格；稳定态 0.14 fps（约 7 秒/帧），479 帧全片约 55-60 分钟，速度与旧 128/24 基本相当但无网格；"非 tiled 全帧"路径实测 >4 分钟/帧不可用；输出不含音轨，需 ffmpeg 从源复制。其次 ComfyUI venv + 4x-UltraSharp（已下载至 `models/upscale_models/4x-UltraSharp.pth`，66,961,958 字节，SHA-256 `a5812231fc936b42af08a5edba784195495d303d5b3248c24489ef0c4021fe01`，spandrel 实测可加载）；纯 ffmpeg `lanczos + unsharp` 仅作快速预览。用 FlashVSR 跑完必须用 ffprobe 校验 `nb_frames` 等于输入帧数（实测曾出现 479 帧输入只输出 100 帧的截断）。详见 [references/video-upscale.md](references/video-upscale.md)。
+备选（可脚本化、离线）：只有在本机先发现并验证 FlashVSR 根目录、Python 环境、CLI 分支/提交和模型包后，才使用 `<FlashVSR_ROOT>`。调用时必须传入实际的绝对脚本路径（例如 `<FlashVSR_ROOT>\ComfyUI-FlashVSR_Stable\cli_main.py`），不要在任意工作目录直接运行裸的 `cli_main.py`，也不要把某台机器的启动器或模型清单当成通用依赖。文档中的 `--tile_size 256 --tile_overlap 64 --frame_chunk_size 50 --keep_models_on_cpu` 是一组已测案例参数，不是所有显卡的固定答案；输出不含音轨，需用本机发现的 ffmpeg 从源复制。ComfyUI venv + 4x-UltraSharp 也必须使用实际的 `<ComfyUI>\models\upscale_models\4x-UltraSharp.pth` 和 Python 路径。所有路线跑完都要用 ffprobe 校验 `nb_frames`、尺寸、帧率和音频流，避免把截断输出误判为画质问题。详见 [references/video-upscale.md](references/video-upscale.md)。
 
 ## 参考资料
 
