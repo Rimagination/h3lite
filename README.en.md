@@ -239,6 +239,16 @@ H3 Lite treats the diffusion model, text encoder, ClipProj, Turbo LoRA, dual VAE
 
 A Set B W4A8 checkpoint once had the correct byte size but corrupted contents and produced colored mosaic frames. H3 Lite verifies registered SHA-256 values on first use or after a file changes, then caches the result so normal reruns do not rehash large files.
 
+### GPU contention with other heavy CUDA apps
+
+ComfyUI keeps models resident even with an empty queue. Under recent Windows WDDM drivers `nvidia-smi --query-compute-apps` cannot report per-process memory, so CUDA can fail to allocate a few MiB while "8 GB is free" — or crash with an access violation (exit code 0xC0000005) instead of an OOM. Diagnose with `python scripts/h3_vram.py --json` (per-process dedicated VRAM via the WDDM counter) and gate with `--check-free-gb 5`; stop a competitor only after confirming its queue is idle, and remember an empty queue does not release resident models. See [references/gpu-contention.md](references/gpu-contention.md) for the measured case (ComfyUI holding 9.8 GB while a Topaz Video AI export failed) and the repair order.
+
+## Video upscale (post-processing, Topaz primary)
+
+The local H3 canvas caps around 0.5 MP; for 1080p/4K do not ask the model to generate wider — upscale is an explicit, user-requested post-processing step that never changes the generation graph. The primary route here is Topaz Video AI: open the video, pick Starlight/Astra Fast (or Proteus/Rhea), choose the output scale (measured examples: 1.125x to 1296x720, 2x to 2304x1280), and export; audio is preserved by the wrap-up remux pass. Before exporting, confirm free VRAM with `scripts/h3_vram.py --json` (stop ComfyUI only after checking `/queue`), note that Astra HQ/Astra Sharp/Starlight Mini are *not installed*, and remember the 0-byte weight trap — a correct filename does not mean a complete file. After export, check the `videoai=Enhanced using ...` metadata tag and do not re-upscale an already-enhanced file.
+
+Scriptable offline fallback: FlashVSR CLI first (`E:\FlashVSR` has its own Python env and the FlashVSR-v1.1 model pack). The old `run_flashvsr.bat` bakes in `--tiled_dit --tiled_vae --tile_size 128` with the default 24-px overlap — the measured cause of grid-seam artifacts; the fix is `run_flashvsr_best.bat` with `--tile_size 256 --tile_overlap 64 --frame_chunk_size 50 --keep_models_on_cpu`: an 8-frame slice finished in 2:58 with no seams; steady state is 0.14 fps (~7 s/frame), so a 479-frame clip takes about 55-60 minutes — same speed as the gridded 128/24 combo but without the seams; the untiled full-frame path measured over 4 min/frame and is unusable; the CLI writes video-only output, so remux the source audio with ffmpeg afterward. Then ComfyUI venv + 4x-UltraSharp (downloaded to `models/upscale_models/4x-UltraSharp.pth`, 66,961,958 bytes, SHA-256 `a5812231fc936b42af08a5edba784195495d303d5b3248c24489ef0c4021fe01`, loadable by spandrel), then plain ffmpeg `lanczos + unsharp` for quick previews. After any FlashVSR run, verify `nb_frames` with ffprobe equals the input frame count — a 479-frame input once produced only 100 output frames from an interrupted run. See [references/video-upscale.md](references/video-upscale.md).
+
 ## References
 
 - [MiniMax H3 ComfyUI tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)
