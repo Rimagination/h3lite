@@ -25,6 +25,11 @@ output/
 !assets/h3-lite-hero-poster.png
 !assets/h3-lite-hero.gif
 !assets/examples/h3lite-i2va-ramen-first-frame.jpg
+!assets/examples/h3lite-i2va-familyguy-first-frame.png
+!assets/examples/h3lite-i2va-familyguy-scene-864x480-8step.mp4
+!docs/gallery/case-familyguy.png
+!docs/gallery/*.jpg
+!docs/videos/*.mp4
 *.safetensors
 *.ckpt
 *.pt

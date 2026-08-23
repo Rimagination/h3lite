@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>H3 Lite · 作品展示</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b24;
+      --panel-2: #1c2531;
+      --line: #2d3948;
+      --text: #edf3fb;
+      --muted: #9eacbd;
+      --accent: #6fa8ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #1a2737 0, var(--bg) 46rem);
+      color: var(--text);
+      font: 16px/1.6 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main { width: min(1120px, calc(100% - 32px)); margin: 0 auto; padding: 52px 0 72px; }
+    a { color: inherit; }
+    h1, h2, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.1; }
+    h2 { margin-bottom: 20px; font-size: 1.35rem; }
+    .intro, .subtle { color: var(--muted); }
+    .intro { max-width: 760px; margin-bottom: 40px; }
+    .section { margin-top: 36px; }
+    .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .card {
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 18px 42px rgb(0 0 0 / 18%);
+      transition: transform .18s ease, border-color .18s ease;
+    }
+    .card:hover { transform: translateY(-3px); border-color: var(--accent); }
+    .card a { display: block; text-decoration: none; }
+    .card img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: cover; background: #080b10; }
+    .card-body { padding: 14px 16px 16px; }
+    .card-title { margin-bottom: 3px; font-weight: 700; }
+    .card-meta, .card-note { color: var(--muted); font-size: .9rem; }
+    .card-note { margin-top: 7px; }
+    .player {
+      padding: 20px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 22px 58px rgb(0 0 0 / 24%);
+    }
+    video { display: block; width: 100%; max-height: 72vh; background: #050608; border-radius: 12px; }
+    .player-info { display: flex; justify-content: space-between; gap: 20px; align-items: baseline; margin-top: 16px; }
+    .back { display: inline-block; margin-top: 16px; color: var(--accent); text-decoration: none; }
+    .message { padding: 18px 20px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; color: var(--muted); }
+    @media (max-width: 820px) {
+      main { padding-top: 32px; }
+      .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .player-info { display: block; }
+    }
+    @media (max-width: 540px) {
+      main { width: min(100% - 20px, 1120px); }
+      .gallery { grid-template-columns: 1fr; }
+      .player { padding: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>H3 Lite · 作品展示</h1>
+      <p class="intro">同一提示词、同一 Set A 组件和同一 4 步 LightX2V LoRA，对比兼容路线与四个单独加速节点组合。这组结果只作为可运行下限和路线对照，调高分辨率、采样步数或 LoRA 强度后，画质仍可继续提升。</p>
+    </header>
+
+    <section id="player-section" class="section" hidden>
+      <div class="player">
+        <video id="video" controls preload="metadata" playsinline></video>
+        <div class="player-info">
+          <div>
+            <h2 id="player-title"></h2>
+            <p id="player-meta" class="subtle"></p>
+          </div>
+          <p id="player-note" class="subtle"></p>
+        </div>
+        <p id="player-error" class="message" hidden>视频文件暂时无法加载。</p>
+        <a class="back" href="./">← 返回作品集</a>
+      </div>
+    </section>
+
+    <section id="gallery-section" class="section">
+      <section>
+        <h2>H3 Lite 生成案例</h2>
+        <div id="example-gallery" class="gallery"></div>
+      </section>
+      <section class="section">
+        <h2>Ref2VA 参考素材</h2>
+        <div id="reference-gallery" class="gallery"></div>
+      </section>
+      <section class="section">
+        <h2>Set A 路线对比</h2>
+        <p class="intro">六条视频都是红球从左向右滚动的同一场景，只改变加速节点组合。</p>
+        <div id="route-gallery" class="gallery"></div>
+      </section>
+    </section>
+  </main>
+
+  <script>
+    const ASSET_BASE = "videos/";
+    const exampleEntries = [
+      {
+        key: "case-red-ball",
+        title: "动作验证 · 红球弹跳",
+        meta: "640×352 · 5 秒 · 原生音频",
+        note: "T2VA · 动作次数与声音验证",
+        video: "case-red-ball.mp4",
+        poster: "case-red-ball.jpg"
+      },
+      {
+        key: "case-golden-retriever",
+        title: "分段提示 · 金毛幼犬",
+        meta: "640×352 · 5 秒 · 原生音频",
+        note: "T2VA · 分段动作与角色状态",
+        video: "case-golden-retriever.mp4",
+        poster: "case-golden-retriever.jpg"
+      },
+      {
+        key: "case-starship-jump",
+        title: "复杂时序 · 星舰跃迁",
+        meta: "1280×704 · 8 秒 · 原生音频",
+        note: "T2VA · 多动作、转场与声音设计",
+        video: "case-starship-jump.mp4",
+        poster: "case-starship-jump.jpg"
+      },
+      {
+        key: "case-familyguy",
+        title: "图生视频 · 客厅换台",
+        meta: "864×480 · 5 秒 · 8 步 · 原生音频",
+        note: "I2VA · 原创美式成人动画场景",
+        video: "case-familyguy.mp4",
+        poster: "case-familyguy.png"
+      }
+    ];
+    const referenceEntries = [
+      {
+        key: "case-pink-lamb-reference",
+        title: "Ref2VA · 粉色西装与黑羊",
+        meta: "1920×1080 · 6 秒 · 官方参考视频",
+        note: "MiniMax 官方输入素材，不是 H3 Lite 生成结果",
+        video: "case-pink-lamb-reference.mp4",
+        poster: "case-pink-lamb-reference.jpg"
+      }
+    ];
+    const routeEntries = [
+      {
+        key: "seta-lightx2v-compat",
+        title: "Set A · LightX2V · 兼容基线",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 308.93 秒",
+        note: "不启用 Sage、Sol、FFN、Block Cache",
+        video: "seta-lightx2v-compat.mp4",
+        poster: "seta-lightx2v-compat.jpg"
+      },
+      {
+        key: "seta-lightx2v-sage",
+        title: "Set A · LightX2V · Sage",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 214.90 秒",
+        note: "仅启用 Sage Attention",
+        video: "seta-lightx2v-sage.mp4",
+        poster: "seta-lightx2v-sage.jpg"
+      },
+      {
+        key: "seta-lightx2v-ffn",
+        title: "Set A · LightX2V · FFN",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 221.07 秒",
+        note: "仅启用 FFN 加速",
+        video: "seta-lightx2v-ffn.mp4",
+        poster: "seta-lightx2v-ffn.jpg"
+      },
+      {
+        key: "seta-lightx2v-blockcache",
+        title: "Set A · LightX2V · Block Cache",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 211.34 秒",
+        note: "仅启用 Block Cache",
+        video: "seta-lightx2v-blockcache.mp4",
+        poster: "seta-lightx2v-blockcache.jpg"
+      },
+      {
+        key: "seta-lightx2v-sol",
+        title: "Set A · LightX2V · Sol",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 205.54 秒",
+        note: "仅启用 Sol Attention",
+        video: "seta-lightx2v-sol.mp4",
+        poster: "seta-lightx2v-sol.jpg"
+      },
+      {
+        key: "seta-lightx2v-all-accel",
+        title: "Set A · LightX2V · 全加速",
+        meta: "640×352 · 5 秒 · 4 步 · 原生音频 · 214.27 秒",
+        note: "Sage + Sol + FFN + Block Cache",
+        video: "seta-lightx2v-all-accel.mp4",
+        poster: "seta-lightx2v-all-accel.jpg"
+      }
+    ];
+    const entries = [...exampleEntries, ...referenceEntries, ...routeEntries];
+
+    const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const exampleGallery = document.querySelector("#example-gallery");
+    const referenceGallery = document.querySelector("#reference-gallery");
+    const routeGallery = document.querySelector("#route-gallery");
+    const playerSection = document.querySelector("#player-section");
+    const gallerySection = document.querySelector("#gallery-section");
+    const video = document.querySelector("#video");
+    const playerError = document.querySelector("#player-error");
+
+    function renderGallery(target, items) {
+      target.innerHTML = items.map((entry) => `
+        <article class="card">
+          <a href="?video=${entry.key}">
+            <img src="gallery/${entry.poster}" alt="${entry.title} 作品封面" loading="lazy">
+            <div class="card-body">
+              <div class="card-title">${entry.title}</div>
+              <div class="card-meta">${entry.meta}</div>
+              <div class="card-note">${entry.note}</div>
+            </div>
+          </a>
+        </article>
+      `).join("");
+    }
+
+    function renderPlayer(entry) {
+      playerSection.hidden = false;
+      gallerySection.hidden = true;
+      document.title = `${entry.title} · H3 Lite`;
+      document.querySelector("#player-title").textContent = entry.title;
+      document.querySelector("#player-meta").textContent = entry.meta;
+      document.querySelector("#player-note").textContent = entry.note;
+      video.poster = `gallery/${entry.poster}`;
+      video.src = ASSET_BASE + encodeURIComponent(entry.video);
+      video.addEventListener("error", () => { playerError.hidden = false; }, { once: true });
+    }
+
+    renderGallery(exampleGallery, exampleEntries);
+    renderGallery(referenceGallery, referenceEntries);
+    renderGallery(routeGallery, routeEntries);
+    const requested = new URLSearchParams(location.search).get("video");
+    const selected = requested ? entryByKey.get(requested) : null;
+    if (selected) renderPlayer(selected);
+  </script>
+</body>
+</html>

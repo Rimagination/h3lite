@@ -189,6 +189,13 @@ megapixels + a 32-pixel multiple. Its common `16:9`, `0.4 MP`, `multiple=32`
 choice resolves to `864x480`. Treat that as the official-style normal canvas,
 not as the low-VRAM fast default.
 
+The fast/accelerated row is for the registered LightX2V/Turbo 4-step LoRA.
+`minimax_h3_turbo_v4_step600_ema.safetensors` is compatibility-only in H3 Lite:
+the v4-plus-Sage/Sol/Chunk/T8 combination produced severe ghosting, motion trails,
+and color artifacts in local validation. Use the compatibility graph for v4, or
+use the LightX2V/Turbo 4-step LoRA for a fast render. The generator rejects the
+disallowed pairing before it can be queued.
+
 Common 16:9 buckets with ComfyUI's 32-pixel alignment:
 
 | Target megapixels | Aligned canvas |
