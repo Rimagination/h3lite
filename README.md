@@ -209,6 +209,8 @@ python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/
 
 本仓库使用 [MIT License](LICENSE)。MiniMax 权重、ComfyUI 和第三方节点各自适用其上游许可证。
 
+感谢 [LINUX DO](https://linux.do/) 的佬友在项目早期分享使用体验和实测反馈。
+
 ## 作者名片
 
 <p align="center">

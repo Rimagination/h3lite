@@ -212,6 +212,8 @@ Start with the [example `show.json`](qoder-plugin/skills/h3-generate/assets/show
 
 This repository uses the [MIT License](LICENSE). MiniMax weights, ComfyUI, and third-party nodes have their own upstream licenses.
 
+Thanks to the [LINUX DO](https://linux.do/) community for sharing their experiences and test results during the early releases.
+
 ## Author card
 
 <p align="center">
