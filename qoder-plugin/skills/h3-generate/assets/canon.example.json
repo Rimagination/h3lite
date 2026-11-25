@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "look": "Naturalistic night interior, warm practical lamp as key, cool window fill, fine film grain, 35 mm lens tendency, shallow but readable depth of field.",
+  "characters": {
+    "A": {
+      "identity": "Adult woman, black shoulder-length hair, deep gray trench coat over a charcoal high-neck sweater, dark trousers, right eyebrow scar, no other accessories.",
+      "voice": "Japanese; fundamental pitch around 100 Hz; dry, slightly hoarse timbre; slow pace; falling sentence endings; close-miked.",
+      "ref_images": [
+        "refs/face_A.png",
+        "refs/body_A.png"
+      ],
+      "ref_audio": "refs/voice_A_dry.wav"
+    }
+  },
+  "locations": {
+    "room": "Narrow apartment corridor, off-white walls, one warm ceiling lamp, dark wood door at frame left."
+  },
+  "props": {
+    "coin": "Worn brass coin, warm highlight on the rim."
+  },
+  "forbidden_drift": [
+    "no costume change",
+    "no age change",
+    "no additional cast members",
+    "no change of voice pitch or timbre"
+  ]
+}

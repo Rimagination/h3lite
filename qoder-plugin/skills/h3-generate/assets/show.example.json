@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "project": "ep04_example",
+  "deliverable": {
+    "duration_seconds": 10.833,
+    "aspect": "16:9",
+    "resolution": "1344x768",
+    "fps": 24,
+    "audio": "native",
+    "subtitles": "subs/ep04.srt",
+    "delivery_dir": "%USERPROFILE%/Downloads",
+    "cover": true
+  },
+  "defaults": {
+    "mode": "ref2va",
+    "template": "h3_c_ref2va768",
+    "component_set": "auto",
+    "length": 244,
+    "fps": 24,
+    "seed": 20261125,
+    "resolution": "1344x768"
+  },
+  "canon": "canon.json",
+  "version_lock": {
+    "prompt_revision": "r1",
+    "reference_pack_sha256": "",
+    "white_model_version": "v5",
+    "model_fingerprint": "set-c-2026-11-19"
+  },
+  "shots": [
+    {
+      "id": "s01",
+      "prompt": "prompts/s01.txt",
+      "mode": "ref2va",
+      "template": "h3_c_ref2va768",
+      "length": 124,
+      "seed": 20261125,
+      "ref_images": [
+        "refs/face_A.png",
+        "refs/body_A.png"
+      ],
+      "ref_audios": [],
+      "first_frame": null,
+      "last_frame": null,
+      "white_model": null,
+      "acceptance": {
+        "identity": "A",
+        "requires_audio": true,
+        "requires_dialogue": false,
+        "min_action_events": 0,
+        "notes": "结尾手完全攥紧硬币并停住"
+      }
+    },
+    {
+      "id": "s02",
+      "prompt": "prompts/s02.txt",
+      "mode": "ref2va",
+      "template": "h3_c_ref2va768",
+      "length": 124,
+      "seed": 20261125,
+      "ref_images": [
+        "refs/face_A.png",
+        "refs/body_A.png"
+      ],
+      "ref_audios": [],
+      "first_frame": null,
+      "last_frame": null,
+      "white_model": {
+        "source": "refs/white_master.mp4",
+        "proxy": "refs/white_proxy_12fps.mp4",
+        "version": "v5",
+        "fps": 12,
+        "resolution": "864x480"
+      },
+      "acceptance": {
+        "identity": "A",
+        "requires_audio": true,
+        "requires_dialogue": false,
+        "min_action_events": 5,
+        "notes": "广播体操两拍，动作事件 5–7 个，结尾回正"
+      }
+    }
+  ],
+  "post": {
+    "concat": true,
+    "loudnorm": true,
+    "subtitles": "subs/ep04.srt",
+    "cover": true
+  }
+}

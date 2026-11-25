@@ -14,6 +14,10 @@
 
 `H3 Lite` 是给 Codex、WorkBuddy 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。描述想看的画面后，Agent 会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
 
+> **Qoder 插件 0.2.0（2026-11-25）**  
+> 本仓库同时发布 Qoder 插件生产版：[`qoder-plugin/`](qoder-plugin/README.md)。它把 H3 Lite 拆成六个 skill（环境/提示词/导演/生成/后期/白模），并加入 Set C 自动路由、开拍前合同、showrunner、原生 `--ref-video`、Blender/MCP、FaceRefine 经验与 Sol VAE 128px 网格修复。  
+> 安装包见 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)；根目录的单体 `SKILL.md` 继续保留给 Codex/WorkBuddy。
+
 ## 模型定位与适用范围
 
 H3 Lite 面向 Windows + NVIDIA + ComfyUI 的低显存本地视频生成。Set A 使用 W4A8 扩散模型和 4B INT4 文本编码器，Set B 使用 4B FP8 文本编码器；两套组件分别对应低显存快速路线和 FP8 兼容路线。
