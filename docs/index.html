@@ -35,6 +35,7 @@
     .intro { max-width: 760px; margin-bottom: 40px; }
     .section { margin-top: 36px; }
     .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .gallery-featured { grid-template-columns: minmax(0, 640px); justify-content: center; }
     .card {
       overflow: hidden;
       background: var(--panel);
@@ -77,7 +78,7 @@
   <main>
     <header>
       <h1>H3 Lite · 作品展示</h1>
-      <p class="intro">H3 Lite 在 Qoder 等 Agent 工作流中生成的部分短片，以及红球滚动场景的 Set A 路线对比。网页播放为 960p 轻量预览，保留原生音频；源片仍保留原始生成分辨率。</p>
+      <p class="intro">H3 Lite 在 ZCode、Qoder 等 Agent 工作流中生成的示例，以及红球滚动场景的 Set A 路线对比。网页播放为轻量预览，保留原生音频；源片仍保留原始生成分辨率。</p>
     </header>
 
     <section id="player-section" class="section" hidden>
@@ -97,12 +98,17 @@
 
     <section id="gallery-section" class="section">
       <section>
-        <h2>Qoder 短片案例</h2>
-        <p class="intro">以下短片由 H3 Lite 在 Qoder 会话中生成，覆盖横屏、竖屏、动作、对白与角色连续性。</p>
+        <h2>ZCode 示例</h2>
+        <p class="intro">由 H3 Lite 在 ZCode 会话中生成：参考图作为首帧，两人对视后缓慢收势，头发与衣领轻微风动。</p>
+        <div id="zcode-gallery" class="gallery gallery-featured"></div>
+      </section>
+      <section class="section">
+        <h2>Qoder 示例</h2>
+        <p class="intro">以下示例由 H3 Lite 在 Qoder 会话中生成，覆盖横屏、竖屏、动作、对白与角色连续性。</p>
         <div id="qoder-gallery" class="gallery"></div>
       </section>
       <section class="section">
-        <h2>H3 Lite 基础案例</h2>
+        <h2>H3 Lite 基础示例</h2>
         <div id="example-gallery" class="gallery"></div>
       </section>
       <section class="section">
@@ -151,6 +157,16 @@
         note: "I2VA · 原创美式成人动画场景",
         video: "case-familyguy.mp4",
         poster: "case-familyguy.png"
+      }
+    ];
+    const zcodeEntries = [
+      {
+        key: "zcode-jojo-faceoff",
+        title: "对视摆 Pose · 缓慢风动",
+        meta: "1344×480 · 5 秒 · 原生音频",
+        note: "I2VA · 参考图首帧、对视、抬手收势",
+        video: "zcode-jojo-faceoff.mp4",
+        poster: "zcode-jojo-faceoff.jpg"
       }
     ];
     const qoderEntries = [
@@ -255,9 +271,10 @@
         poster: "seta-lightx2v-all-accel.jpg"
       }
     ];
-    const entries = [...qoderEntries, ...exampleEntries, ...referenceEntries, ...routeEntries];
+    const entries = [...zcodeEntries, ...qoderEntries, ...exampleEntries, ...referenceEntries, ...routeEntries];
 
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const zcodeGallery = document.querySelector("#zcode-gallery");
     const qoderGallery = document.querySelector("#qoder-gallery");
     const exampleGallery = document.querySelector("#example-gallery");
     const referenceGallery = document.querySelector("#reference-gallery");
@@ -294,6 +311,7 @@
       video.addEventListener("error", () => { playerError.hidden = false; }, { once: true });
     }
 
+    renderGallery(zcodeGallery, zcodeEntries);
     renderGallery(qoderGallery, qoderEntries);
     renderGallery(exampleGallery, exampleEntries);
     renderGallery(referenceGallery, referenceEntries);

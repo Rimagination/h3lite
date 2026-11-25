@@ -54,7 +54,7 @@
   </tr>
 </table>
 
-<p align="center"><a href="https://rimagination.github.io/h3lite/">More Qoder clips and Set A route comparisons →</a></p>
+<p align="center"><a href="https://rimagination.github.io/h3lite/">More ZCode / Qoder examples and Set A route comparisons →</a></p>
 
 ## Hand it to an agent in one minute
 

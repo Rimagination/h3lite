@@ -52,7 +52,7 @@
   </tr>
 </table>
 
-<p align="center"><a href="https://rimagination.github.io/h3lite/">更多 Qoder 短片与 Set A 路线对比 →</a></p>
+<p align="center"><a href="https://rimagination.github.io/h3lite/">更多 ZCode / Qoder 示例与 Set A 路线对比 →</a></p>
 
 ## 快速开始
 
