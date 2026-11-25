@@ -27,8 +27,8 @@
   </tr>
 </table>
 
-> **0.2.1 · 通用 Agent 插件**  
-> 六个 skill 同时以 [`qoder-plugin/`](qoder-plugin/README.md) 和 [`dsh-plugin/`](dsh-plugin/README.md) 分发；DSH 额外注册 `h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs` 四个原生工具。标准 MCP 入口在 `dsh-plugin/runtime/h3-mcp-server.cjs`。仓库当前版本 0.2.1，安装包仍可参考 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)。
+> **0.2.0 · 通用 Agent 插件**  
+> 六个 skill 同时以 [`qoder-plugin/`](qoder-plugin/README.md) 和 [`dsh-plugin/`](dsh-plugin/README.md) 分发；DSH 额外注册 `h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs` 四个原生工具。标准 MCP 入口在 `dsh-plugin/runtime/h3-mcp-server.cjs`。仓库与 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) 均为 0.2.0。
 
 ## 先看效果
 

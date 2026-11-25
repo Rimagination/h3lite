@@ -6,7 +6,7 @@ H3Lite 是一个通用的 AI Agent 插件：把本机 MiniMax H3 / ComfyUI 视�
 - **四个 DSH 原生工具**：`h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs`。
 - **同一份脚本**也服务于 Qoder、Claude Code、Codex、ZCode 和标准 MCP 客户端；插件不调用云端 API。
 
-版本与仓库主插件对齐：**0.2.1**。
+版本与仓库主插件对齐：**0.2.0**。
 
 ## 前置条件
 
@@ -45,7 +45,7 @@ npm pack --dry-run   # 确认 skills/**、lib/**、runtime/**、cordis.patch.yml
 npm publish --access public
 ```
 
-发布后用户在 **Add plugin** 填 `h3lite` 或 `h3lite@0.2.1`。也可把 `npm pack` 生成的 `.tgz` 上传到 GitHub Release，直接填 tarball URL。
+发布后用户在 **Add plugin** 填 `h3lite` 或 `h3lite@0.2.0`。也可把 `npm pack` 生成的 `.tgz` 上传到 GitHub Release，直接填 tarball URL。
 
 ## 工具
 

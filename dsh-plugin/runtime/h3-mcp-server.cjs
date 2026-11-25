@@ -63,7 +63,7 @@ const PYTHON = resolvePython();
 // JSON-RPC / MCP plumbing
 // ---------------------------------------------------------------------------
 const PROTOCOL_VERSION = '2024-11-05';
-const SERVER_INFO = { name: 'h3lite', version: '0.2.1' };
+const SERVER_INFO = { name: 'h3lite', version: '0.2.0' };
 
 function send(msg) {
   process.stdout.write(JSON.stringify(msg) + '\n');

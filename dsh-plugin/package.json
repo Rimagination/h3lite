@@ -1,6 +1,6 @@
 {
   "name": "h3lite",
-  "version": "0.2.1",
+  "version": "0.2.0",
   "description": "DeepSeek Harness bundle for H3Lite: local MiniMax H3 video production skills plus native h3_generate / h3_status / h3_doctor / h3_list_runs tools.",
   "type": "module",
   "license": "MIT",

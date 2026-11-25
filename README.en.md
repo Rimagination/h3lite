@@ -29,8 +29,8 @@
   </tr>
 </table>
 
-> **0.2.1 · general agent plugin**  
-> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); DSH also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools. The standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. Current repository version is 0.2.1; the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) remains available as an older package.
+> **0.2.0 · general agent plugin**  
+> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); DSH also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools. The standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. The repository and the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) are both 0.2.0.
 
 ## See it first
 

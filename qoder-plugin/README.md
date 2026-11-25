@@ -1,10 +1,10 @@
 # H3Lite — 通用 AI Agent 插件
 
-版本 **0.2.1**。把本机 MiniMax H3 视频生产工作流打包成可移植的六 skill 套件，并在 Qoder（`.qoder-plugin`）与 DeepSeek Harness（`dsh-plugin`）注册。环境、提示词、导演、生成、后期、白模六个 skill 各自独立，共享 Set C 生产路线、开拍前合同、showrunner、原生参考视频与实测 QA 规则。
+版本 **0.2.0**。把本机 MiniMax H3 视频生产工作流打包成可移植的六 skill 套件，并在 Qoder（`.qoder-plugin`）与 DeepSeek Harness（`dsh-plugin`）注册。环境、提示词、导演、生成、后期、白模六个 skill 各自独立，共享 Set C 生产路线、开拍前合同、showrunner、原生参考视频与实测 QA 规则。
 
-> 0.2.0 是插件化生产版；0.2.1 是未发布的本地补丁，处理 GitHub issue #19（新任务丢失 ComfyUI 路径）和 #20（Blackwell 量化内核风险）。线上 [`Rimagination/h3lite`](https://github.com/Rimagination/h3lite) 仍是单体 `SKILL.md`（最后提交 `9bafafa`，2026-08-24）；完整差异与版本历史见 [`CHANGELOG.md`](CHANGELOG.md)。代码许可见 [`LICENSE`](LICENSE)。
+> 0.2.0 是插件化生产版，并持续吸收 GitHub issue #19（新任务丢失 ComfyUI 路径）与 #20（Blackwell 量化内核风险）的修复，以及通用 Agent / DSH 适配。线上 [`Rimagination/h3lite`](https://github.com/Rimagination/h3lite) 同步提供 `qoder-plugin/`、`dsh-plugin/` 与根目录单体 `SKILL.md`；完整差异与版本历史见 [`CHANGELOG.md`](CHANGELOG.md)。代码许可见 [`LICENSE`](LICENSE)。
 
-## 0.2.1 修复：新任务路径与 Blackwell 风险
+## 0.2.0 更新：新任务路径与 Blackwell 风险
 
 - **机器级 ComfyUI 路径**：新增 `~/.h3lite/config.json` 与 `H3LITE_COMFYUI` / `H3LITE_CONFIG`。解析顺序 `--comfyui` → 环境变量 → 配置文件 → `<project>/ComfyUI` → `~/ComfyUI`；`h3_doctor.py --write-config` 一次写入。Qoder/WorkBuddy 新任务读到配置就直接复用安装，不再提示下载 11–15 GB 的 ComfyUI。
 - **Blackwell 量化守卫**：医生在 RTX 50 系 + `w4a8/int8/convrot` DiT 时输出 `blackwell_quantized.status=risk`，预检和生成器同步警告；不硬拦，因为根因在上游 comfy-kitchen。
@@ -50,13 +50,13 @@
 
 - 安装通过 `~/.qoder/plugins/installed_plugins_v2.json` + Qoder plugin-registry watcher 完成；当前活动版本以该文件为准。
 - 安装/升级时保留现有缓存里的 `.mcp.json` 与 `runtime/`，否则会丢 h3lite 的 MCP 工具。
-- 安装前备份在 `2026-11-19/9accdccb/backups/h3lite-0.2.1-20261126/`（旧注册表、`.mcp.json`、`runtime/`）。
-- 旧版本缓存（0.1.12 / 0.1.1–0.2.1）保留作回滚；安装仍需用户明确确认。
+- 安装前备份在 `2026-11-19/9accdccb/backups/h3lite-0.2.0-20261126/`（旧注册表、`.mcp.json`、`runtime/`）。
+- 旧版本缓存（0.1.12 / 0.1.1–0.2.0）保留作回滚；安装仍需用户明确确认。
 - 安装或迁移后运行一次 `python skills/h3-workstation/scripts/h3_doctor.py --comfyui <ComfyUI> --write-config`，把路径写入 `~/.h3lite/config.json`；新任务不再依赖上一任务的会话上下文。
 
 ## DeepSeek Harness / 通用 Agent
 
-- `dsh-plugin/` 是同一套能力的 DSH bundle（`h3lite@0.2.1`）：六个 skill + 四个原生工具 `h3_generate` / `h3_status` / `h3_doctor` / `h3_list_runs`。
+- `dsh-plugin/` 是同一套能力的 DSH bundle（`h3lite@0.2.0`）：六个 skill + 四个原生工具 `h3_generate` / `h3_status` / `h3_doctor` / `h3_list_runs`。
 - DSH 安装：**Plugins → Add plugin** 填 `dsh-plugin` 的绝对路径，或发布后填 npm 包名 `h3lite`；本机已 link 到 desktop profile，重启 DSH 或切换一次插件后生效。
 - 其他 Agent：直接复用 `skills/`；标准 MCP 客户端可用 `dsh-plugin/runtime/h3-mcp-server.cjs`；不依赖 Qoder 专有环境变量。
 - 详细前置依赖、工具参数、npm 发布与 tarball 安装见 [dsh-plugin/README.md](https://github.com/Rimagination/h3lite/blob/main/dsh-plugin/README.md)。
@@ -75,9 +75,9 @@ Set C 的四个模型、六个工作流和许可已打包到夸克网盘，供 1
 ## 与线上 H3 Lite 的关系
 
 - 线上：单体 `SKILL.md` + 11 个 references + 11 个核心脚本 + 6 个 W4A8 工作流 + docs/示例/tests，共 78 文件。
-- 本地 0.2.1：六个 skill、32 个 references、12 个工作流（6 W4A8 + 6 Set C）；新增 showrunner/白模/资产/缓存/Blender 集成/网格 QA/路径配置/Blackwell 守卫等脚本。
+- 本地 0.2.0：六个 skill、32 个 references、12 个工作流（6 W4A8 + 6 Set C）；新增 showrunner/白模/资产/缓存/Blender 集成/网格 QA/路径配置/Blackwell 守卫等脚本。
 - 线上 `SKILL.md`、`docs/`、`assets/examples/`、`tests/` 等展示/开发资产没有随插件包分发；`LICENSE` 已补回。
-- 线上尚未收到 0.1.2–0.2.1 的更新；若要发布，需要把本地插件说明与线上单体 skill 的定位分开维护。
+- 线上尚未收到 0.1.2–0.2.0 的更新；若要发布，需要把本地插件说明与线上单体 skill 的定位分开维护。
 
 ## 已知边界
 

@@ -1,8 +1,8 @@
 # H3Lite 更新说明
 
-## 0.2.1（2026-11-26）— 新任务路径与 Blackwell 风险补丁（未发布）
+## 0.2.0（2026-11-26 更新）— 新任务路径、Blackwell 风险与 DSH 适配
 
-处理 GitHub issue #19 与 #20 的本地补丁；不改生成图、不改采样参数。
+0.2.0 持续更新：处理 GitHub issue #19 与 #20；不改生成图、不改采样参数。
 
 ### 修复与新增
 
@@ -12,7 +12,7 @@
 | 医生写配置 | `h3_doctor.py --write-config` 校验 `main.py` + `models/` 后原子写入配置；报告新增 `comfyui.source` 与 `comfyui.config` |
 | 生成器/ showrunner | 未传 `--comfyui` 时自动读取 env/config；dry-run 新增 `comfyui_source`、`runtime_warnings` |
 | Blackwell 守卫 | 50 系 + `w4a8/int8/convrot` DiT → 医生 `blackwell_quantized.status=risk`，预检 `checks.blackwell_quantized`，生成器打印警告 |
-| DSH 适配 | 新增 `dsh-plugin/`：六个 skill + 四个原生工具 `h3_generate/h3_status/h3_doctor/h3_list_runs`；`npm pack` 自包含，可作为 `h3lite@0.2.1` 发布 |
+| DSH 适配 | 新增 `dsh-plugin/`：六个 skill + 四个原生工具 `h3_generate/h3_status/h3_doctor/h3_list_runs`；`npm pack` 自包含，可作为 `h3lite@0.2.0` 发布 |
 | 通用化 | 路径/文档去掉 Qoder 单一宿主措辞；同一套 `skills/` 可用于 Qoder、DSH、Claude Code、Codex、ZCode；MCP server 同步支持 `--ref-video` 和 `video_vae` |
 | 文档 | `deployment-matrix.md` 新增 Blackwell 专节、上游链接、文本影响测试与 fp8 DiT 单变量绕行；`component-sets.md` 标明 Set C 在 sm_120 未验证 |
 
@@ -20,9 +20,9 @@
 
 - #19 的应用层“未安装”弹窗不归插件管；插件侧保证新任务能读到机器级路径，不再走到下载 11–15 GB 包的分支。
 - #20 根因在上游 comfy-kitchen convrot 内核；H3Lite 只警告、给绕行，不硬拦、不声称修复。
-- 0.2.1 未发布到 GitHub；线上 release 仍为 v0.2.0。
+- 0.2.0 不另起补丁版本号；GitHub release 仍为 v0.2.0，发布资产需随仓库更新。
 
-## 0.2.0（2026-11-25）— 插件化生产版（含 Sol VAE 修复）
+## 0.2.0 初版（2026-11-25）— 插件化生产版（含 Sol VAE 修复）
 
 这是 H3Lite 从“单体 H3 Lite skill”升级为“Qoder 生产插件”的第一个大版本。线上 `Rimagination/h3lite` 仍停留在单体 `SKILL.md`（最后提交 `9bafafa`，2026-08-24）；0.2.0 把本地验证过的生产链路收敛为六个 skill 的插件，并把 Sol VAE 的 128px 接缝发现一并入库。
 
