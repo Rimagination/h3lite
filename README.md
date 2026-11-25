@@ -19,7 +19,7 @@
 **H3 Lite 让你在自己的电脑上制作有声 AI 视频。** 告诉 AI 助手你想拍什么，或给它一张图作为开场。助手会根据你的显卡选择合适的方案，用 MiniMax H3 生成带环境声、音效或对白的片段。想做一条多镜头短片，也可以用 H3 Lite 做分镜和预演，再逐镜生成和剪辑。
 
 <p align="center">
-  <a href="#先看样片">看样片</a> · <a href="#快速开始">快速开始</a> · <a href="#多镜头制作">多镜头制作</a> · <a href="#硬件与模型">硬件与模型</a>
+  <a href="#先看样片">看样片</a> · <a href="#快速开始">快速开始</a> · <a href="#多镜头制作">多镜头制作</a> · <a href="#硬件与模型">硬件与模型</a> · <a href="#blender-建模与预演">Blender 建模</a>
 </p>
 
 <a name="先看样片"></a>
@@ -93,7 +93,7 @@
 
 ## <img src="assets/readme/section-03-workflow.webp" width="100%" alt="03 把镜头做成短片">
 
-**用 v0.2.0 做短片，可以先定分镜和角色设定，再逐镜生成、检查和剪辑。** 机位或走位拿不准时，先用 Blender 搭个简单场景看预演，再把预演视频当作动作参考。
+**用 v0.2.0 做短片，可以先定分镜和角色设定，再逐镜生成、检查和剪辑。** 需要规划复杂机位或走位时，可以先做 [Blender 白模预演](#blender-建模与预演)。
 
 <p align="center">
   <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite 制作流程：准备 ComfyUI 和模型 → 锁定分镜与预演 → 逐镜生成并验收 → 剪辑、字幕和成片交付">
@@ -171,6 +171,28 @@ python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/
 - **显存不足或长任务中断。** 16 GB 路线建议逐镜串行。排查同机其他 CUDA 进程和模型驻留，长视频拆成多镜并保留每镜 manifest。[显存排查](qoder-plugin/skills/h3-workstation/references/gpu-contention.md)
 
 </details>
+
+<a name="blender-建模与预演"></a>
+
+## <img src="assets/readme/section-05-blender.webp" width="100%" alt="05 Blender 建模与预演">
+
+想让相机绕过主体，或让角色沿着一条路线移动，可以先在 Blender 里用简单几何体搭出角色、道具和场景。这就是**白模**。把走位、动作和相机做成一段预演视频，再交给 H3 作为运动参考。
+
+<p align="center">
+  <a href="https://rimagination.github.io/h3lite/?video=zcode-blender-unicorn-compare"><img src="docs/gallery/zcode-blender-unicorn-compare.jpg" width="760" alt="独角兽玩偶的上下对照，上半屏为 Blender 白模，下半屏为 MiniMax H3 生成画面"></a>
+  <br>
+  <a href="https://rimagination.github.io/h3lite/?video=zcode-blender-unicorn-compare"><strong>播放独角兽玩偶广播体操 · 10.8 秒</strong></a>
+  <br>
+  <sub>上半屏是 Blender 白模，下半屏是 H3 画面。可以对照看运镜和伸展动作。</sub>
+</p>
+
+### 从白模到成片
+
+1. **搭场景、排机位。** 用 `h3-whitemodel` 摆好主体、地面和道具，给动作与相机加关键帧。在 Blender 里先看一遍，确认构图和遮挡。
+2. **用 Ref2VA 生成。** 把白模视频交给 H3 当动作和运镜参考，再给一张角色参考图和画面提示词。角色外观和材质由参考图与提示词引导。
+3. **回看对照。** 检查镜头有没有绕到预期位置，主体有没有被挡住。H3 可能会重排动作节奏，预留一次成片检查。
+
+[Blender 工作流](qoder-plugin/skills/h3-whitemodel/SKILL.md) · [把白模视频接进 Ref2VA](qoder-plugin/skills/h3-whitemodel/references/h3-video-reference.md) · [画廊中的 Blender 案例](https://rimagination.github.io/h3lite/#blender-gallery)
 
 ## 文档与许可
 

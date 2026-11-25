@@ -19,7 +19,7 @@
 **H3 Lite lets you make AI videos with sound on your own computer.** Tell your AI assistant what you want to film or give it an image to start from. It will choose a workflow for your GPU and use MiniMax H3 to generate a clip with ambience, sound effects, or dialogue. For a short film, H3 Lite can also help you plan and preview shots, generate them one at a time, and edit them together.
 
 <p align="center">
-  <a href="#sample-clips">Sample clips</a> · <a href="#quick-start">Quick start</a> · <a href="#production-workflow">Make a short film</a> · <a href="#hardware-and-models">Hardware and models</a>
+  <a href="#sample-clips">Sample clips</a> · <a href="#quick-start">Quick start</a> · <a href="#production-workflow">Make a short film</a> · <a href="#hardware-and-models">Hardware and models</a> · <a href="#blender-modeling-and-previs">Blender modeling</a>
 </p>
 
 <a name="sample-clips"></a>
@@ -96,7 +96,7 @@ the duration, audio track, and motion.
 
 ## <img src="assets/readme/section-03-workflow.webp" width="100%" alt="03 Make a short film">
 
-**In v0.2.0 you can plan a short film, then generate, check, and edit it shot by shot.** If you need to work out a camera move or where someone should stand, try it first in a simple Blender scene. You can use that preview video as a motion reference.
+**In v0.2.0 you can plan a short film, then generate, check, and edit it shot by shot.** For more involved camera moves or blocking, start with [Blender modeling and previs](#blender-modeling-and-previs).
 
 <p align="center">
   <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite production workflow: set up ComfyUI and models, plan shots and previs, render and verify each shot, then edit and deliver">
@@ -174,6 +174,28 @@ On one RTX 4060 Ti 16 GB, total time for a **640×352, 124-frame, four-step** cl
 - **A render runs out of VRAM or stalls.** Render one shot at a time on the 16 GB route. Check other CUDA processes and models still in memory. Split long videos into shots and keep the per-shot manifests. [GPU contention guide](qoder-plugin/skills/h3-workstation/references/gpu-contention.md)
 
 </details>
+
+<a name="blender-modeling-and-previs"></a>
+
+## <img src="assets/readme/section-05-blender.webp" width="100%" alt="05 Blender modeling and previs">
+
+When you want the camera to circle a subject or a character to follow a path, block out the character, props, and scene with simple shapes in Blender. Render a short preview of the motion and give H3 the video as a reference.
+
+<p align="center">
+  <a href="https://rimagination.github.io/h3lite/?video=zcode-blender-unicorn-compare"><img src="docs/gallery/zcode-blender-unicorn-compare.jpg" width="760" alt="Stacked comparison of a toy unicorn in a gray Blender blockout above and the color MiniMax H3 render below"></a>
+  <br>
+  <a href="https://rimagination.github.io/h3lite/?video=zcode-blender-unicorn-compare"><strong>Play the toy unicorn workout · 10.8 seconds</strong></a>
+  <br>
+  <sub>Blender blockout on top, H3 render below. Watch how the camera moves around the unicorn as it stretches.</sub>
+</p>
+
+### From Blender blockout to H3 video
+
+1. **Build the scene and set the camera.** With `h3-whitemodel`, place the subject, ground, and props, then keyframe the action and camera. Preview the shot in Blender to check framing and occlusion.
+2. **Generate with Ref2VA.** Pass the blockout video to H3 as a reference for motion and camera moves. Add a character reference image and a prompt to guide appearance and materials.
+3. **Compare the two versions.** Check where the camera goes and whether anything obscures the subject. H3 may retime the action, so review the finished shot.
+
+[Blender workflow](qoder-plugin/skills/h3-whitemodel/SKILL.md) · [Use a blockout video in Ref2VA](qoder-plugin/skills/h3-whitemodel/references/h3-video-reference.md) · [Blender examples in the gallery](https://rimagination.github.io/h3lite/#blender-gallery)
 
 ## Documentation and license
 
