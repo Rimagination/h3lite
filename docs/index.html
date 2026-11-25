@@ -204,9 +204,10 @@
       <a href="#basics" data-section="basics"><span class="num">01</span>H3 Lite 基础示例</a>
       <a href="#blender" data-section="blender" title="使用 Blender 建模和参考生视频"><span class="num">02</span>Blender 建模与参考</a>
       <a href="#zcode" data-section="zcode"><span class="num">03</span>ZCode 示例</a>
-      <a href="#qoder" data-section="qoder"><span class="num">04</span>Qoder 示例</a>
-      <a href="#ref2va" data-section="ref2va"><span class="num">05</span>Ref2VA 参考素材</a>
-      <a href="#seta" data-section="seta"><span class="num">06</span>Set A 路线对比</a>
+      <a href="#sizes" data-section="sizes"><span class="num">04</span>生成尺寸对比</a>
+      <a href="#qoder" data-section="qoder"><span class="num">05</span>Qoder 示例</a>
+      <a href="#ref2va" data-section="ref2va"><span class="num">06</span>Ref2VA 参考素材</a>
+      <a href="#seta" data-section="seta"><span class="num">07</span>Set A 路线对比</a>
     </nav>
     <div class="sidebar-footer">
       <a href="https://github.com/Rimagination/h3lite">GitHub 仓库 ↗</a><br>
@@ -217,11 +218,12 @@
     <header id="overview" class="hero">
       <p class="eyebrow">H3LITE / LOCAL VIDEO GALLERY</p>
       <h1>H3 Lite <em>作品展示</em></h1>
-      <p class="intro">H3 Lite 在 ZCode、Qoder 等 Agent 工作流中生成的示例，以及红球滚动场景的 Set A 路线对比。网页播放为轻量预览，保留原生音频；源片仍保留原始生成分辨率。</p>
+      <p class="intro">H3 Lite 在 ZCode、Qoder 等 Agent 工作流中生成的示例，以及同一镜头的 1344×480 / 1600×576 / 2094×752 尺寸对比和红球滚动场景的 Set A 路线对比。网页播放为轻量预览，保留原生音频；源片仍保留原始生成分辨率。</p>
       <div class="hero-meta">
         <span class="pill">本地 ComfyUI</span>
         <span class="pill">原生音频</span>
         <span class="pill">ZCode / Qoder</span>
+        <span class="pill">生成尺寸对比</span>
         <span class="pill">Blender 白模参考</span>
       </div>
     </header>
@@ -255,6 +257,12 @@
         <h2>ZCode 示例</h2>
         <p class="intro">由 H3 Lite 在 ZCode 会话中生成：参考图作为首帧，两人对视后缓慢收势，头发与衣领轻微风动。</p>
         <div id="zcode-gallery" class="gallery gallery-featured"></div>
+      </section>
+      <section id="sizes" class="section">
+        <h2>生成尺寸对比</h2>
+        <p class="intro">同一张参考图、I2VA 路线、4 步、24 fps、124 帧：1344×480 为早期基线，1600×576 为原生高分辨率重跑，2094×752 由 1600×576 后处理放大。1344 版动作与后两版略有差异，因此生成耗时用于看趋势，画质对比以 1600 → 2094 为主。</p>
+        <p class="intro">实测墙钟耗时（RTX 4060 Ti 16GB，含模型加载与解码）：1344×480 155.51 秒 → 1600×576 248.16 秒；像素 1.43×，用时 1.60×。2094×752 为放大交付，没有原生采样耗时。</p>
+        <div id="size-gallery" class="gallery"></div>
       </section>
       <section id="qoder" class="section">
         <h2>Qoder 示例</h2>
@@ -317,6 +325,32 @@
         note: "I2VA · 参考图首帧、对视、抬手收势",
         video: "zcode-jojo-faceoff.mp4",
         poster: "zcode-jojo-faceoff.jpg"
+      }
+    ];
+    const sizeEntries = [
+      {
+        key: "size-1344x480",
+        title: "1344×480 · 基线",
+        meta: "原生采样 · 155.51 秒 · 5.17 秒",
+        note: "I2VA · 4 步 · Pika lite · 早期基线，动作略有差异",
+        video: "zcode-jojo-faceoff.mp4",
+        poster: "zcode-jojo-faceoff-1344x480.jpg"
+      },
+      {
+        key: "size-1600x576",
+        title: "1600×576 · 原生高分辨率",
+        meta: "原生采样 · 248.16 秒 · 5.17 秒",
+        note: "I2VA · 4 步 · fp16 VAE · 像素 1.43×",
+        video: "zcode-jojo-faceoff-1600x576.mp4",
+        poster: "zcode-jojo-faceoff-1600x576.jpg"
+      },
+      {
+        key: "size-2094x752",
+        title: "2094×752 · 放大交付",
+        meta: "后处理放大 · 无采样耗时 · 5.17 秒",
+        note: "1600×576 → Lanczos 1.31× · 观察尺寸与画质上限",
+        video: "zcode-jojo-faceoff-2094x752.mp4",
+        poster: "zcode-jojo-faceoff-2094x752.jpg"
       }
     ];
     const blenderEntries = [
@@ -431,11 +465,12 @@
         poster: "seta-lightx2v-all-accel.jpg"
       }
     ];
-    const entries = [...exampleEntries, ...blenderEntries, ...zcodeEntries, ...qoderEntries, ...referenceEntries, ...routeEntries];
+    const entries = [...exampleEntries, ...blenderEntries, ...zcodeEntries, ...sizeEntries, ...qoderEntries, ...referenceEntries, ...routeEntries];
 
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
     const blenderGallery = document.querySelector("#blender-gallery");
     const zcodeGallery = document.querySelector("#zcode-gallery");
+    const sizeGallery = document.querySelector("#size-gallery");
     const qoderGallery = document.querySelector("#qoder-gallery");
     const exampleGallery = document.querySelector("#example-gallery");
     const referenceGallery = document.querySelector("#reference-gallery");
@@ -516,6 +551,7 @@
     renderGallery(exampleGallery, exampleEntries);
     renderGallery(blenderGallery, blenderEntries);
     renderGallery(zcodeGallery, zcodeEntries);
+    renderGallery(sizeGallery, sizeEntries);
     renderGallery(qoderGallery, qoderEntries);
     renderGallery(referenceGallery, referenceEntries);
     renderGallery(routeGallery, routeEntries);
