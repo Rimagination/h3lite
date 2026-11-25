@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="212" viewBox="0 0 1200 212"
+     role="img" aria-labelledby="title description">
+  <title id="title">Total render time on an RTX 4060 Ti 16 GB</title>
+  <desc id="description">For the same 640 by 352, 124-frame, four-step render, the baseline took 52.68 seconds, and full Set C acceleration took 22.91 seconds.</desc>
+
+  <rect width="1200" height="212" rx="20" fill="#211e1b"/>
+  <g font-family="system-ui, 'Segoe UI', sans-serif">
+    <text x="42" y="49" fill="#f6ede0" font-size="30" font-weight="700">Total render time</text>
+    <g fill="#e2d7c9" font-size="30">
+      <text x="42" y="108">Baseline</text>
+      <text x="42" y="166">Set C</text>
+    </g>
+    <path d="M250 79v96" stroke="#685e53" stroke-width="2"/>
+    <rect x="251" y="81" width="690" height="32" rx="5" fill="#bd885c"/>
+    <rect x="251" y="139" width="300.07" height="32" rx="5" fill="#7bd0c2"/>
+    <g fill="#fff5e8" text-anchor="end" font-size="34" font-weight="700">
+      <text x="1154" y="108">52.68 s</text>
+      <text x="1154" y="166">22.91 s</text>
+    </g>
+  </g>
+</svg>
