@@ -19,7 +19,7 @@
 **H3 Lite 让你在自己的电脑上制作有声 AI 视频。** 告诉 AI 助手你想拍什么，或给它一张图作为开场。助手会根据你的显卡选择合适的方案，用 MiniMax H3 生成带环境声、音效或对白的片段。想做一条多镜头短片，也可以用 H3 Lite 做分镜和预演，再逐镜生成和剪辑。
 
 <p align="center">
-  <a href="#先看样片">看样片</a> · <a href="#快速开始">快速开始</a> · <a href="#多镜头制作">多镜头制作</a> · <a href="#硬件与模型">硬件与模型</a> · <a href="#blender-建模与预演">Blender 建模</a>
+  <a href="#先看样片">看样片</a> · <a href="#快速开始">快速开始</a> · <a href="#硬件与模型">硬件与模型</a> · <a href="#blender-建模与预演">Blender 建模与预演</a> · <a href="#多镜头制作">短片生成工作流</a>
 </p>
 
 <a name="先看样片"></a>
@@ -88,47 +88,6 @@
 保留两次撞击声和滚动声，不配音乐。完成后告诉我 MP4 的位置，并检查时长、音轨和画面运动。
 ```
 
-<a name="多镜头制作"></a>
-<a name="新版工作流"></a>
-
-## <img src="assets/readme/section-03-workflow.webp" width="100%" alt="03 把镜头做成短片">
-
-**用 v0.2.0 做短片，可以先定分镜和角色设定，再逐镜生成、检查和剪辑。** 需要规划复杂机位或走位时，可以先做 [Blender 白模预演](#blender-建模与预演)。
-
-<p align="center">
-  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite 制作流程：准备 ComfyUI 和模型 → 锁定分镜与预演 → 逐镜生成并验收 → 剪辑、字幕和成片交付">
-</p>
-
-| 你想做什么 | 用哪个 Skill |
-| --- | --- |
-| 检查显卡，准备模型和 ComfyUI | [`h3-workstation`](qoder-plugin/skills/h3-workstation/SKILL.md) |
-| 把想拍的画面、动作和声音写成提示词 | [`h3-prompt`](qoder-plugin/skills/h3-prompt/SKILL.md) |
-| 拆分镜头，保持角色、场景和声音一致 | [`h3-director`](qoder-plugin/skills/h3-director/SKILL.md) |
-| 用 Blender 白模排机位和动作，导出参考视频 | [`h3-whitemodel`](qoder-plugin/skills/h3-whitemodel/SKILL.md) |
-| 逐镜生成，检查帧数、运动和音轨 | [`h3-generate`](qoder-plugin/skills/h3-generate/SKILL.md) |
-| 拼接、加字幕、调响度和放大成片 | [`h3-post`](qoder-plugin/skills/h3-post/SKILL.md) |
-
-批量制作时，`show.json` 记录镜头计划，`canon.json` 留下角色、声音和场景设定。Showrunner 按计划逐镜生成，跑到一半停了也能跳过已经验收的镜头。[多镜头项目示例](qoder-plugin/skills/h3-generate/assets/show.example.json)
-
-<details>
-<summary><strong>用命令行保存 ComfyUI 路径并续跑多镜项目</strong></summary>
-
-在仓库根目录运行。把示例路径换成实际 ComfyUI 目录，`--write-config` 会将其写入 `~/.h3lite/config.json`。
-
-```powershell
-python qoder-plugin/skills/h3-workstation/scripts/h3_doctor.py --comfyui "D:/MiniMax-H3/ComfyUI" --write-config
-```
-
-完成 `show.json`、`canon.json` 和参考素材准备后，下面的命令会先检查计划与参考指纹，再继续未完成的镜头。
-
-```powershell
-python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/ep01/show.json --strict --check-sha --resume
-```
-
-从 [`show.json` 示例](qoder-plugin/skills/h3-generate/assets/show.example.json)和[多镜项目规范](qoder-plugin/skills/h3-generate/references/show-contract.md)开始。
-
-</details>
-
 ### 按手头的素材选生成方式
 
 | 你想控制什么 | 给助手的素材 | 对应路线 |
@@ -142,9 +101,9 @@ python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/
 
 <a name="硬件与模型"></a>
 
-## <img src="assets/readme/section-04-hardware.webp" width="100%" alt="04 选硬件和模型">
+## <img src="assets/readme/section-03-hardware.webp" width="100%" alt="03 硬件与模型">
 
-先按 **NVIDIA 显卡的显存**选一组模型。系统内存和工作流也会影响可用分辨率。先跑通 640×352，再尝试更大的画面。
+先按 **NVIDIA 显卡的显存**选一组模型。系统内存和工作流也会影响可用分辨率。先跑通 640×352，再尝试更大的画面。用 [`h3-workstation`](qoder-plugin/skills/h3-workstation/SKILL.md) 检查显卡、模型组件和 ComfyUI 环境。
 
 | 你想从哪里开始 | 组件集 | 下载 |
 | --- | --- | --- |
@@ -174,7 +133,7 @@ python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/
 
 <a name="blender-建模与预演"></a>
 
-## <img src="assets/readme/section-05-blender.webp" width="100%" alt="05 Blender 建模与预演">
+## <img src="assets/readme/section-04-blender.webp" width="100%" alt="04 Blender 建模与预演">
 
 想让相机绕过主体，或让角色沿着一条路线移动，可以先在 Blender 里用简单几何体搭出角色、道具和场景。这就是**白模**。把走位、动作和相机做成一段预演视频，再交给 H3 作为运动参考。
 
@@ -186,13 +145,62 @@ python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/
   <sub>上半屏是 Blender 白模，下半屏是 H3 画面。可以对照看运镜和伸展动作。</sub>
 </p>
 
-### 从白模到成片
+### 在 Blender 里准备一个镜头
 
-1. **搭场景、排机位。** 用 `h3-whitemodel` 摆好主体、地面和道具，给动作与相机加关键帧。在 Blender 里先看一遍，确认构图和遮挡。
-2. **用 Ref2VA 生成。** 把白模视频交给 H3 当动作和运镜参考，再给一张角色参考图和画面提示词。角色外观和材质由参考图与提示词引导。
-3. **回看对照。** 检查镜头有没有绕到预期位置，主体有没有被挡住。H3 可能会重排动作节奏，预留一次成片检查。
+1. **搭出场景。** 用 [`h3-whitemodel`](qoder-plugin/skills/h3-whitemodel/SKILL.md) 摆好主体、地面和道具，先检查它们在画面里的大小和位置。
+2. **排走位和机位。** 给主体动作和相机加关键帧，预览运动方向、遮挡和取景。
+3. **导出预演视频。** 保留一条清楚可读的动作与运镜参考，供后续 Ref2VA 使用。另备一张角色参考图，用于引导成片中的角色外观。
+
+把这些参考素材接进整部片的方式见[短片生成工作流](#多镜头制作)。
 
 [Blender 工作流](qoder-plugin/skills/h3-whitemodel/SKILL.md) · [把白模视频接进 Ref2VA](qoder-plugin/skills/h3-whitemodel/references/h3-video-reference.md) · [画廊中的 Blender 案例](https://rimagination.github.io/h3lite/#blender-gallery)
+
+<a name="多镜头制作"></a>
+<a name="新版工作流"></a>
+
+## <img src="assets/readme/section-05-workflow.webp" width="100%" alt="05 短片生成工作流">
+
+**我们反复试过分镜、参考素材和生成方式，最终用这套流程自动做完了一条 3 分 25 秒的短片。**
+
+[观看成片《隔壁的念经声，千万别让它停｜纸芝居怪谈 第1话》](https://www.bilibili.com/video/BV1j8y8zgE1H/)
+
+给出故事、角色参考和目标时长后，Agent 会把整部片拆成一组短镜头，再逐镜生成、检查，最后剪成一条完整视频。
+
+<p align="center">
+  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite 短片生成工作流：分镜与设定 → 逐镜生成 → 验收与重跑 → 剪辑与交付">
+</p>
+
+### 一部短片怎么自动做完
+
+1. **定分镜和镜头提示。** [`h3-director`](qoder-plugin/skills/h3-director/SKILL.md) 拆解故事，在 `canon.json` 固定角色、场景和声音设定，在 `show.json` 记录每镜的参考素材、目标时长和验收要求。[`h3-prompt`](qoder-plugin/skills/h3-prompt/SKILL.md) 把动作、运镜和声音写成镜头提示词。
+2. **按镜头表逐镜生成。** [`h3-generate`](qoder-plugin/skills/h3-generate/SKILL.md) 先检查项目和素材，再通过 Showrunner 逐镜排队生成。输出和进度写入 `show_manifest.json`，中断后可以继续。
+3. **逐镜验收。** 自动检查时长、帧数、画面运动和音轨，再按镜头计划复核角色、动作和前后衔接。
+4. **剪辑和交付。** [`h3-post`](qoder-plugin/skills/h3-post/SKILL.md) 按镜头顺序剪接，处理音量和声音衔接，按需加字幕并导出成片。
+
+### 这套框架为什么重要
+
+模型生成有随机性，也就是常说的「抽卡」。镜头一多，角色漂移、动作偏差或声音不一致都可能带来废片和返工。统一设定与参考素材给所有镜头一个共同基准，逐镜验收能及早发现问题。遇到偏差，只调整和重跑受影响的镜头，已经通过的镜头可以继续用于剪辑。
+
+<details>
+<summary><strong>用命令行运行或续跑项目</strong></summary>
+
+在仓库根目录运行。把示例路径换成实际 ComfyUI 目录，`--write-config` 会将其写入 `~/.h3lite/config.json`。
+
+```powershell
+python qoder-plugin/skills/h3-workstation/scripts/h3_doctor.py --comfyui "D:/MiniMax-H3/ComfyUI" --write-config
+```
+
+完成 `show.json`、`canon.json` 和参考素材准备后，下面的命令会先检查计划与参考指纹，再继续未完成的镜头。
+
+```powershell
+python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/ep01/show.json --strict --check-sha --resume
+```
+
+要重跑指定镜头，在命令末尾加上 `--only s03 --force`，把 `s03` 换成实际的镜头编号。
+
+从 [`show.json` 示例](qoder-plugin/skills/h3-generate/assets/show.example.json)和[多镜项目规范](qoder-plugin/skills/h3-generate/references/show-contract.md)开始。
+
+</details>
 
 ## 文档与许可
 

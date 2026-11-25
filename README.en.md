@@ -19,7 +19,7 @@
 **H3 Lite lets you make AI videos with sound on your own computer.** Tell your AI assistant what you want to film or give it an image to start from. It will choose a workflow for your GPU and use MiniMax H3 to generate a clip with ambience, sound effects, or dialogue. For a short film, H3 Lite can also help you plan and preview shots, generate them one at a time, and edit them together.
 
 <p align="center">
-  <a href="#sample-clips">Sample clips</a> · <a href="#quick-start">Quick start</a> · <a href="#production-workflow">Make a short film</a> · <a href="#hardware-and-models">Hardware and models</a> · <a href="#blender-modeling-and-previs">Blender modeling</a>
+  <a href="#sample-clips">Sample clips</a> · <a href="#quick-start">Quick start</a> · <a href="#hardware-and-models">Hardware and models</a> · <a href="#blender-modeling-and-previs">Blender modeling and previs</a> · <a href="#production-workflow">Short film workflow</a>
 </p>
 
 <a name="sample-clips"></a>
@@ -92,46 +92,6 @@ impacts and the rolling sound. Leave out music. Return the MP4 path and check
 the duration, audio track, and motion.
 ```
 
-<a name="production-workflow"></a>
-
-## <img src="assets/readme/section-03-workflow.webp" width="100%" alt="03 Make a short film">
-
-**In v0.2.0 you can plan a short film, then generate, check, and edit it shot by shot.** For more involved camera moves or blocking, start with [Blender modeling and previs](#blender-modeling-and-previs).
-
-<p align="center">
-  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite production workflow: set up ComfyUI and models, plan shots and previs, render and verify each shot, then edit and deliver">
-</p>
-
-| What you want to do | Skill |
-| --- | --- |
-| Check your GPU and set up the models and ComfyUI | [`h3-workstation`](qoder-plugin/skills/h3-workstation/SKILL.md) |
-| Turn your scene, action, and sound into a prompt | [`h3-prompt`](qoder-plugin/skills/h3-prompt/SKILL.md) |
-| Plan the shots and keep characters, settings, and voices consistent | [`h3-director`](qoder-plugin/skills/h3-director/SKILL.md) |
-| Block the action in Blender and export a motion reference | [`h3-whitemodel`](qoder-plugin/skills/h3-whitemodel/SKILL.md) |
-| Generate shots and check frames, motion, and audio | [`h3-generate`](qoder-plugin/skills/h3-generate/SKILL.md) |
-| Assemble clips, add subtitles, adjust loudness, or upscale | [`h3-post`](qoder-plugin/skills/h3-post/SKILL.md) |
-
-For batch rendering, keep the shot list in `show.json` and recurring characters, voices, and settings in `canon.json`. The showrunner renders one shot at a time and skips shots that passed review when you resume. [Example multi-shot project](qoder-plugin/skills/h3-generate/assets/show.example.json)
-
-<details>
-<summary><strong>Save your ComfyUI path and resume a multi-shot project from the terminal</strong></summary>
-
-Run these commands from the repository root. Replace the example path with your actual ComfyUI directory. The first command saves it in `~/.h3lite/config.json`.
-
-```powershell
-python qoder-plugin/skills/h3-workstation/scripts/h3_doctor.py --comfyui "D:/MiniMax-H3/ComfyUI" --write-config
-```
-
-After preparing `show.json`, `canon.json`, and the reference files, use the next command to validate the plan and reference hashes before resuming unfinished shots.
-
-```powershell
-python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/ep01/show.json --strict --check-sha --resume
-```
-
-Start with the [example `show.json`](qoder-plugin/skills/h3-generate/assets/show.example.json) and the [multi-shot project guide](qoder-plugin/skills/h3-generate/references/show-contract.md).
-
-</details>
-
 ### Decide what to give the model
 
 | What you want to control | What to give your assistant | Mode |
@@ -145,9 +105,9 @@ Try the [original first frame from the TV scene](assets/examples/h3lite-i2va-fam
 
 <a name="hardware-and-models"></a>
 
-## <img src="assets/readme/section-04-hardware.webp" width="100%" alt="04 Pick hardware and models">
+## <img src="assets/readme/section-03-hardware.webp" width="100%" alt="03 Hardware and models">
 
-Choose a component set based on your **NVIDIA GPU's VRAM**. System RAM and the workflow also affect the resolution you can use. Start at 640×352 before trying a larger frame.
+Choose a component set based on your **NVIDIA GPU's VRAM**. System RAM and the workflow also affect the resolution you can use. Start at 640×352 before trying a larger frame. Use [`h3-workstation`](qoder-plugin/skills/h3-workstation/SKILL.md) to check the GPU, model components, and ComfyUI installation.
 
 | Where to start | Component set | Download |
 | --- | --- | --- |
@@ -177,7 +137,7 @@ On one RTX 4060 Ti 16 GB, total time for a **640×352, 124-frame, four-step** cl
 
 <a name="blender-modeling-and-previs"></a>
 
-## <img src="assets/readme/section-05-blender.webp" width="100%" alt="05 Blender modeling and previs">
+## <img src="assets/readme/section-04-blender.webp" width="100%" alt="04 Blender modeling and previs">
 
 When you want the camera to circle a subject or a character to follow a path, block out the character, props, and scene with simple shapes in Blender. Render a short preview of the motion and give H3 the video as a reference.
 
@@ -189,13 +149,61 @@ When you want the camera to circle a subject or a character to follow a path, bl
   <sub>Blender blockout on top, H3 render below. Watch how the camera moves around the unicorn as it stretches.</sub>
 </p>
 
-### From Blender blockout to H3 video
+### Prepare a shot in Blender
 
-1. **Build the scene and set the camera.** With `h3-whitemodel`, place the subject, ground, and props, then keyframe the action and camera. Preview the shot in Blender to check framing and occlusion.
-2. **Generate with Ref2VA.** Pass the blockout video to H3 as a reference for motion and camera moves. Add a character reference image and a prompt to guide appearance and materials.
-3. **Compare the two versions.** Check where the camera goes and whether anything obscures the subject. H3 may retime the action, so review the finished shot.
+1. **Block out the scene.** Use [`h3-whitemodel`](qoder-plugin/skills/h3-whitemodel/SKILL.md) to place the subject, floor, and props. Check their position and scale in the frame.
+2. **Plan the movement.** Keyframe the subject and camera, then preview the shot to check direction, occlusion, and framing.
+3. **Export the preview.** Save a clear video of the action and camera move for Ref2VA. Keep a separate character reference image to guide the character's appearance.
+
+See the [short film workflow](#production-workflow) for how to use these references in a multi-shot project.
 
 [Blender workflow](qoder-plugin/skills/h3-whitemodel/SKILL.md) · [Use a blockout video in Ref2VA](qoder-plugin/skills/h3-whitemodel/references/h3-video-reference.md) · [Blender examples in the gallery](https://rimagination.github.io/h3lite/#blender-gallery)
+
+<a name="production-workflow"></a>
+
+## <img src="assets/readme/section-05-workflow.webp" width="100%" alt="05 Short film workflow">
+
+**After trying different shot plans, references, and generation settings, we used this workflow to automatically make a 3:25 short film.**
+
+[Watch the finished film, *The Chanting Next Door: Never Let It Stop* · Kamishibai Horror, Episode 1](https://www.bilibili.com/video/BV1j8y8zgE1H/)
+
+Given a story, character references, and a target runtime, the agent breaks the film into short shots, generates and checks each one, then edits them into a finished video.
+
+<p align="center">
+  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite short film workflow: plan the story and shots, generate each shot, review and rerun where needed, then edit and export">
+</p>
+
+### How the automation works
+
+1. **Plan the shots and write the prompts.** [`h3-director`](qoder-plugin/skills/h3-director/SKILL.md) breaks down the story. It records recurring characters, settings, and voices in `canon.json`, and each shot's references, target length, and acceptance criteria in `show.json`. [`h3-prompt`](qoder-plugin/skills/h3-prompt/SKILL.md) turns each shot into a prompt for action, camera, and sound.
+2. **Render one shot at a time.** [`h3-generate`](qoder-plugin/skills/h3-generate/SKILL.md) checks the project and its assets, then queues shots through the Showrunner. Output paths and progress go to `show_manifest.json` so the run can resume after an interruption.
+3. **Review each shot.** Automatic checks cover duration, frame count, motion, and audio. Then use the shot plan to review character consistency, action, and continuity between cuts.
+4. **Edit and deliver.** [`h3-post`](qoder-plugin/skills/h3-post/SKILL.md) assembles the shots, adjusts audio levels and transitions, adds subtitles as needed, and exports the film.
+
+### Why the workflow matters
+
+Generation varies from take to take. Across a full film, drifting characters, missed actions, and inconsistent voices can add up to a lot of discarded footage. Shared references give every shot the same starting point, and checking shots as they finish catches problems early. You can adjust and rerun the affected shot while keeping the clips that already passed review.
+
+<details>
+<summary><strong>Run or resume a project from the terminal</strong></summary>
+
+Run these commands from the repository root. Replace the example path with your actual ComfyUI directory. The first command saves it in `~/.h3lite/config.json`.
+
+```powershell
+python qoder-plugin/skills/h3-workstation/scripts/h3_doctor.py --comfyui "D:/MiniMax-H3/ComfyUI" --write-config
+```
+
+After preparing `show.json`, `canon.json`, and the reference files, use the next command to validate the plan and reference hashes before resuming unfinished shots.
+
+```powershell
+python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/ep01/show.json --strict --check-sha --resume
+```
+
+To rerun an individual shot, add `--only s03 --force` to the command and replace `s03` with the shot ID.
+
+Start with the [example `show.json`](qoder-plugin/skills/h3-generate/assets/show.example.json) and the [multi-shot project guide](qoder-plugin/skills/h3-generate/references/show-contract.md).
+
+</details>
 
 ## Documentation and license
 
