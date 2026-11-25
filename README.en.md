@@ -22,8 +22,8 @@
 
 <table>
   <tr>
-    <td align="center" width="25%"><strong>Local</strong><br><sub>ComfyUI + your GPU<br>assets stay offline</sub></td>
-    <td align="center" width="25%"><strong>Native audio</strong><br><sub>dialogue / ambience / SFX<br>generated with the picture</sub></td>
+    <td align="center" width="25%"><strong>Local</strong><br><sub>local ComfyUI<br>assets stay offline</sub></td>
+    <td align="center" width="25%"><strong>Native audio</strong><br><sub>dialogue · ambience · SFX<br>generated with the picture</sub></td>
     <td align="center" width="25%"><strong>Low-VRAM routes</strong><br><sub>8 GB / 16 GB tiers<br>4-step preview → final canvas</sub></td>
     <td align="center" width="25%"><strong>Multi-host plugin</strong><br><sub>Qoder · DSH · Codex<br>Claude Code · ZCode</sub></td>
   </tr>
