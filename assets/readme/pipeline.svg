@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="270" viewBox="0 0 1200 270" role="img" aria-label="H3 Lite 本地视频流水线：提示词与参考素材进入路由，经 ComfyUI 渲染，再由 QA 与 manifest 验收；同一套 skills 和脚本可被 Qoder、DeepSeek Harness、Codex、Claude Code、ZCode 使用。">
+  <rect width="1200" height="270" rx="18" fill="#0b1116"/>
+  <rect x="1" y="1" width="1198" height="268" rx="17" fill="none" stroke="#22313a"/>
+  <g opacity="0.45" stroke="#1a2831" stroke-width="1">
+    <path d="M0 54h1200M0 108h1200M0 162h1200M0 216h1200"/>
+    <path d="M60 0v270M300 0v270M540 0v270M780 0v270M1020 0v270"/>
+  </g>
+  <text x="56" y="38" fill="#63e6d5" font-family="'Segoe UI','Microsoft YaHei',sans-serif" font-size="13" font-weight="700" letter-spacing="3">H3LITE / LOCAL VIDEO PIPELINE</text>
+  <text x="1144" y="38" text-anchor="end" fill="#8fa3ad" font-family="'Segoe UI','Microsoft YaHei',sans-serif" font-size="12">Windows · NVIDIA · ComfyUI</text>
+
+  <g font-family="'Segoe UI','Microsoft YaHei',sans-serif">
+    <g>
+      <rect x="56" y="70" width="238" height="112" rx="12" fill="#111d24" stroke="#2b4650"/>
+      <text x="76" y="96" fill="#63e6d5" font-size="11" font-weight="700" letter-spacing="2">01 INPUT</text>
+      <text x="76" y="123" fill="#e8f0f2" font-size="18" font-weight="700">提示词 + 参考</text>
+      <text x="76" y="148" fill="#8fa3ad" font-size="12">文字 / 首尾帧 / 图片</text>
+      <text x="76" y="166" fill="#8fa3ad" font-size="12">音频 / 白模视频</text>
+    </g>
+    <g>
+      <rect x="334" y="70" width="238" height="112" rx="12" fill="#111d24" stroke="#2b4650"/>
+      <text x="354" y="96" fill="#63e6d5" font-size="11" font-weight="700" letter-spacing="2">02 ROUTE</text>
+      <text x="354" y="123" fill="#e8f0f2" font-size="18" font-weight="700">选择生成路线</text>
+      <text x="354" y="148" fill="#8fa3ad" font-size="12">T2VA · I2VA · FL2VA</text>
+      <text x="354" y="166" fill="#8fa3ad" font-size="12">Ref2VA · 8–16 GB 路由</text>
+    </g>
+    <g>
+      <rect x="612" y="70" width="238" height="112" rx="12" fill="#111d24" stroke="#2b4650"/>
+      <text x="632" y="96" fill="#f2b45c" font-size="11" font-weight="700" letter-spacing="2">03 RENDER</text>
+      <text x="632" y="123" fill="#e8f0f2" font-size="18" font-weight="700">ComfyUI 本地生成</text>
+      <text x="632" y="148" fill="#8fa3ad" font-size="12">W4A8 / Set C / 原生音频</text>
+      <text x="632" y="166" fill="#8fa3ad" font-size="12">4 步预览 · 最终画布</text>
+    </g>
+    <g>
+      <rect x="890" y="70" width="254" height="112" rx="12" fill="#111d24" stroke="#2b4650"/>
+      <text x="910" y="96" fill="#f2b45c" font-size="11" font-weight="700" letter-spacing="2">04 VERIFY</text>
+      <text x="910" y="123" fill="#e8f0f2" font-size="18" font-weight="700">QA + manifest</text>
+      <text x="910" y="148" fill="#8fa3ad" font-size="12">帧率 / 音轨 / 动态 / 接缝</text>
+      <text x="910" y="166" fill="#8fa3ad" font-size="12">失败只重跑单镜</text>
+    </g>
+    <g stroke="#3a5a64" stroke-width="2" fill="none">
+      <path d="M298 126h24"/><path d="M314 120l8 6-8 6"/>
+      <path d="M576 126h24"/><path d="M592 120l8 6-8 6"/>
+      <path d="M854 126h24"/><path d="M870 120l8 6-8 6"/>
+    </g>
+  </g>
+
+  <text x="56" y="222" fill="#8fa3ad" font-family="'Segoe UI','Microsoft YaHei',sans-serif" font-size="11" letter-spacing="1">同一套 skills / scripts，交给不同宿主</text>
+  <g font-family="'Segoe UI','Microsoft YaHei',sans-serif" font-size="12" font-weight="600">
+    <rect x="56" y="233" width="72" height="24" rx="12" fill="#15262c" stroke="#2f5a5a"/>
+    <text x="92" y="249" text-anchor="middle" fill="#c9f4ee">Qoder</text>
+    <rect x="140" y="233" width="152" height="24" rx="12" fill="#15262c" stroke="#2f5a5a"/>
+    <text x="216" y="249" text-anchor="middle" fill="#c9f4ee">DeepSeek Harness</text>
+    <rect x="304" y="233" width="72" height="24" rx="12" fill="#15262c" stroke="#2f5a5a"/>
+    <text x="340" y="249" text-anchor="middle" fill="#c9f4ee">Codex</text>
+    <rect x="388" y="233" width="102" height="24" rx="12" fill="#15262c" stroke="#2f5a5a"/>
+    <text x="439" y="249" text-anchor="middle" fill="#c9f4ee">Claude Code</text>
+    <rect x="502" y="233" width="66" height="24" rx="12" fill="#15262c" stroke="#2f5a5a"/>
+    <text x="535" y="249" text-anchor="middle" fill="#c9f4ee">ZCode</text>
+  </g>
+  <text x="1144" y="249" text-anchor="end" fill="#5e737d" font-family="'Segoe UI','Microsoft YaHei',sans-serif" font-size="11">prompt → route → render → verify</text>
+</svg>

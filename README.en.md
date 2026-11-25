@@ -14,28 +14,71 @@
   <a href="README.md">中文</a> | English | <a href="#references">References</a>
 </p>
 
-`H3 Lite` is a MiniMax H3 local video-generation skill for AI agents such as Codex, Claude Code, WorkBuddy, Qoder, DeepSeek Harness and ZCode. Describe the clip you want, and the agent selects a ComfyUI route, prepares the components, generates native video and audio, and verifies the result.
+`H3 Lite` turns MiniMax H3 into a **reusable local video pipeline**: describe the clip, and the agent picks a `T2VA` / `I2VA` / `FL2VA` / `Ref2VA` route, prepares the ComfyUI components, generates native video and audio, then verifies frame count, audio, motion and seams.
 
-> **General agent plugin 0.2.1 (2026-11-26)**  
-> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); the DSH bundle also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools.  
-> The same `skills/` and scripts work with Codex, Claude Code, WorkBuddy and ZCode; the standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. Current repository version is 0.2.1; the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) remains available as an older package.
+<p align="center">
+  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite local video pipeline: prompt and references enter routing, ComfyUI renders, then QA and manifests verify the result; the same skills and scripts run in Qoder, DeepSeek Harness, Codex, Claude Code and ZCode.">
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="25%"><strong>Local</strong><br><sub>ComfyUI + your GPU<br>assets stay offline</sub></td>
+    <td align="center" width="25%"><strong>Native audio</strong><br><sub>dialogue / ambience / SFX<br>generated with the picture</sub></td>
+    <td align="center" width="25%"><strong>Low-VRAM routes</strong><br><sub>8 GB / 16 GB tiers<br>4-step preview → final canvas</sub></td>
+    <td align="center" width="25%"><strong>Multi-host plugin</strong><br><sub>Qoder · DSH · Codex<br>Claude Code · ZCode</sub></td>
+  </tr>
+</table>
+
+> **0.2.1 · general agent plugin**  
+> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); DSH also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools. The standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. Current repository version is 0.2.1; the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) remains available as an older package.
+
+## See it first
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball"><img src="docs/gallery/case-red-ball.jpg" width="300" alt="Five-second bouncing red ball validation clip"></a><br>
+      <strong>5-second pipeline check</strong><br>
+      <sub>red ball · native impact sound · 640×352</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever"><img src="docs/gallery/case-golden-retriever.jpg" width="300" alt="Golden retriever puppy waking up timeline-prompt example"></a><br>
+      <strong>Timeline prompt</strong><br>
+      <sub>puppy wakes up · motion + sound</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-familyguy"><img src="docs/gallery/case-familyguy.png" width="300" alt="Sitcom living-room channel-change image-to-video example"></a><br>
+      <strong>Image to video</strong><br>
+      <sub>locked first frame · channel change</sub>
+    </td>
+  </tr>
+</table>
 
 ## Hand it to an agent in one minute
 
-Send this to Codex or WorkBuddy:
+Send the repository link to any agent (Codex, Claude Code, WorkBuddy, Qoder, DSH or ZCode):
 
 ```text
 Please install H3 Lite and prepare a local MiniMax H3 video-generation environment for my computer:
 https://github.com/Rimagination/h3lite
 ```
 
-Initial setup time depends on model size, network, and storage speed.
-
 Choose a non-system drive in the same request when needed:
 
 ```text
 Install MiniMax H3 and ComfyUI under F:\MiniMax-H3. Reuse the environment if it is already healthy.
 ```
+
+Initial setup time depends on model size, network, and storage speed; an existing healthy ComfyUI is reused.
+
+## Contents
+
+- [Hand it to an agent](#hand-it-to-an-agent-in-one-minute)
+- [Validated computers](#validated-computers-and-default-route)
+- [From brief to verified clip](#from-brief-to-verified-clip)
+- [Installation](#installation-target-and-component-downloads)
+- [Quick validation](#quick-validation-bouncing-red-ball)
+- [Prompting and examples](#generate-with-structured-prompts)
 
 ## Validated computers and default route
 

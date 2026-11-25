@@ -12,11 +12,73 @@
 
 <p align="center">中文 | <a href="README.en.md">English</a> | <a href="#参考资料">参考资料</a></p>
 
-`H3 Lite` 是给 Codex、Claude Code、WorkBuddy、Qoder、DeepSeek Harness、ZCode 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。描述想看的画面后，Agent 会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
+`H3 Lite` 把 MiniMax H3 变成一套**可复用的本地视频生产线**：描述画面，Agent 自动选择 `T2VA` / `I2VA` / `FL2VA` / `Ref2VA` 路线，准备 ComfyUI 组件，生成带原生声音的视频，并按帧率、音轨、动态和接缝验收。
 
-> **通用 Agent 插件 0.2.1（2026-11-26）**  
-> 同一套六个 skill（环境/提示词/导演/生成/后期/白模）按宿主分发：[`qoder-plugin/`](qoder-plugin/README.md) 是 Qoder 包；[`dsh-plugin/`](dsh-plugin/README.md) 是 DeepSeek Harness 包，并额外注册 `h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs` 四个原生工具。  
-> 同一套 `skills/` 与脚本也可直接给 Codex、Claude Code、WorkBuddy、ZCode 使用；标准 MCP 入口在 `dsh-plugin/runtime/h3-mcp-server.cjs`。仓库当前版本 0.2.1，安装包仍可参考 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)。
+<p align="center">
+  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite 本地视频流水线：提示词与参考素材进入路由，经 ComfyUI 渲染，再由 QA 与 manifest 验收；同一套 skills 和脚本可被 Qoder、DeepSeek Harness、Codex、Claude Code、ZCode 使用。">
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="25%"><strong>本地生成</strong><br><sub>ComfyUI + 本机 GPU<br>素材不上传</sub></td>
+    <td align="center" width="25%"><strong>原生音视频</strong><br><sub>对白 / 环境声 / 动作声<br>与画面同一次生成</sub></td>
+    <td align="center" width="25%"><strong>低显存路线</strong><br><sub>8 GB / 16 GB 分档<br>4 步预览 → 最终画布</sub></td>
+    <td align="center" width="25%"><strong>多宿主插件</strong><br><sub>Qoder · DSH · Codex<br>Claude Code · ZCode</sub></td>
+  </tr>
+</table>
+
+> **0.2.1 · 通用 Agent 插件**  
+> 六个 skill 同时以 [`qoder-plugin/`](qoder-plugin/README.md) 和 [`dsh-plugin/`](dsh-plugin/README.md) 分发；DSH 额外注册 `h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs` 四个原生工具。标准 MCP 入口在 `dsh-plugin/runtime/h3-mcp-server.cjs`。仓库当前版本 0.2.1，安装包仍可参考 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)。
+
+## 先看效果
+
+<table>
+  <tr>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball"><img src="docs/gallery/case-red-ball.jpg" width="300" alt="红球弹跳 5 秒验证片"></a><br>
+      <strong>5 秒链路验证</strong><br>
+      <sub>红球 · 原生撞击声 · 640×352</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever"><img src="docs/gallery/case-golden-retriever.jpg" width="300" alt="金毛幼犬醒来 5 秒分段提示案例"></a><br>
+      <strong>分段提示</strong><br>
+      <sub>金毛幼犬醒来 · 动作 + 声音</sub>
+    </td>
+    <td align="center" width="33%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-familyguy"><img src="docs/gallery/case-familyguy.png" width="300" alt="恶搞之家式客厅换台图生视频案例"></a><br>
+      <strong>图生视频</strong><br>
+      <sub>首帧锁定 · 客厅换台</sub>
+    </td>
+  </tr>
+</table>
+
+## 快速开始
+
+把仓库链接发给任意 Agent（Codex、Claude Code、WorkBuddy、Qoder、DSH 或 ZCode）：
+
+```text
+请帮我安装 H3 Lite，并根据我的电脑配置准备本地 MiniMax H3 视频生成环境：
+https://github.com/Rimagination/h3lite
+```
+
+如果不想占用系统盘，把目标位置写进同一条消息：
+
+```text
+请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
+```
+
+首次安装时间取决于模型大小、网络和硬盘速度；已有 ComfyUI 会优先复用。
+
+## 目录
+
+- [快速开始](#快速开始)
+- [模型定位与适用范围](#模型定位与适用范围)
+- [从需求到成片](#从需求到成片四步工作流)
+- [硬件与路线选择](#硬件与路线选择)
+- [安装与组件](#安装与组件)
+- [第一次验证](#第一次验证)
+- [提示词与案例](#提示词与案例)
+- [故障排查](#组件完整性与故障排查)
 
 ## 模型定位与适用范围
 
@@ -51,23 +113,6 @@ Mac 社区路线可参考[社区权重包](https://huggingface.co/yunfengwang/mm
 提示词按“意图 → 场景与角色 → 动作与分镜 → 运镜与声音 → 防漂移约束”增强，最后转换为 H3 的 `integrated_multimodal_description`、`overall_soundscape`、`non_diegetic_music` 字段。
 
 模糊需求可参考 [`references/prompt-assist.md`](references/prompt-assist.md) 补齐场景、动作、运镜和声音。
-
-## 快速开始
-
-把下面这句话发给 Codex 或 WorkBuddy：
-
-```text
-请帮我安装 H3 Lite，并根据我的电脑配置准备本地 MiniMax H3 视频生成环境：
-https://github.com/Rimagination/h3lite
-```
-
-如果不想占用系统盘，把目标位置写进同一条消息：
-
-```text
-请把 MiniMax H3 和 ComfyUI 安装到 F:\MiniMax-H3；如果那里已经有健康环境就直接复用。
-```
-
-首次安装时间取决于模型大小、网络和硬盘速度。
 
 ## 硬件与路线选择
 
