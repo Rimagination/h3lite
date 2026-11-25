@@ -20,8 +20,8 @@
 
 <table>
   <tr>
-    <td align="center" width="25%"><strong>本地生成</strong><br><sub>ComfyUI + 本机 GPU<br>素材不上传</sub></td>
-    <td align="center" width="25%"><strong>原生音视频</strong><br><sub>对白 / 环境声 / 动作声<br>与画面同一次生成</sub></td>
+    <td align="center" width="25%"><strong>本地生成</strong><br><sub>本机 ComfyUI<br>素材不上传</sub></td>
+    <td align="center" width="25%"><strong>原生音视频</strong><br><sub>对白、环境声与音效<br>与画面同一次生成</sub></td>
     <td align="center" width="25%"><strong>低显存路线</strong><br><sub>8 GB / 16 GB 分档<br>4 步预览 → 最终画布</sub></td>
     <td align="center" width="25%"><strong>多宿主插件</strong><br><sub>Qoder · DSH · Codex<br>Claude Code · ZCode</sub></td>
   </tr>
