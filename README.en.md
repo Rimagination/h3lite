@@ -1,363 +1,204 @@
 # H3 Lite
 
 <p align="center">
-  <img src="assets/h3-lite-hero.gif" alt="H3 Lite — MiniMax H3 skill for local ComfyUI video generation" width="100%">
+  <picture>
+    <source media="(prefers-reduced-motion: reduce)" type="image/webp" srcset="assets/readme/hero-still.webp">
+    <source media="(max-width: 640px)" type="image/webp" srcset="assets/readme/hero-mobile.webp">
+    <img src="assets/readme/hero-desktop.webp" alt="H3 Lite animated banner for local MiniMax H3 video generation with ComfyUI" width="75%">
+  </picture>
 </p>
 
 <p align="center">
-  <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1F5E4A?style=for-the-badge">
-  <img alt="Hosts Any Agent" src="https://img.shields.io/badge/Hosts-Any%20Agent-4B6B8A?style=for-the-badge">
-  <img alt="Route Low VRAM Fast" src="https://img.shields.io/badge/Route-Low--VRAM%20Fast-D9A441?style=for-the-badge">
+  <img src="assets/readme/badges.svg" alt="License MIT | Hosts Skill + MCP | Route Low-VRAM Fast" width="544">
 </p>
 
 <p align="center">
-  <a href="README.md">中文</a> | English | <a href="#references">References</a>
+  <a href="README.md">中文</a> | <strong>English</strong> | <a href="https://github.com/Rimagination/h3lite/blob/v0.2.0/qoder-plugin/CHANGELOG.md#新能力">更新说明</a>
 </p>
 
-`H3 Lite` turns MiniMax H3 into a **reusable local video pipeline**: describe the clip, and the agent picks a `T2VA` / `I2VA` / `FL2VA` / `Ref2VA` route, prepares the ComfyUI components, generates native video and audio, then verifies frame count, audio, motion and seams.
+**H3 Lite lets you make AI videos with sound on your own computer.** Tell your AI assistant what you want to film or give it an image to start from. It will choose a workflow for your GPU and use MiniMax H3 to generate a clip with ambience, sound effects, or dialogue. For a short film, H3 Lite can also help you plan and preview shots, generate them one at a time, and edit them together.
 
 <p align="center">
-  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite local video pipeline: prompt and references enter routing, ComfyUI renders, then QA and manifests verify the result; the same skills and scripts run in Qoder, DeepSeek Harness, Codex, Claude Code and ZCode.">
+  <a href="#sample-clips">Sample clips</a> · <a href="#quick-start">Quick start</a> · <a href="#production-workflow">Make a short film</a> · <a href="#hardware-and-models">Hardware and models</a>
 </p>
+
+<a name="sample-clips"></a>
+
+## <img src="assets/readme/section-01-samples.webp" width="100%" alt="01 Watch the clips">
+
+Select a thumbnail and turn on the sound. H3 Lite generated both the picture and the audio you hear in these clips.
 
 <table>
   <tr>
-    <td align="center" width="25%"><strong>Local</strong><br><sub>local ComfyUI<br>assets stay offline</sub></td>
-    <td align="center" width="25%"><strong>Native audio</strong><br><sub>dialogue · ambience · SFX<br>generated with the picture</sub></td>
-    <td align="center" width="25%"><strong>Low-VRAM routes</strong><br><sub>8 GB / 16 GB tiers<br>4-step preview → final canvas</sub></td>
-    <td align="center" width="25%"><strong>Multi-host plugin</strong><br><sub>Qoder · DSH · Codex<br>Claude Code · ZCode</sub></td>
+    <td align="center" width="50%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball"><img src="docs/gallery/case-red-ball.jpg" width="420" alt="A red ball with water splashing beside it"></a><br>
+      <strong>Bouncing red ball</strong><br><sub>5-second test · impacts and rolling sound</sub>
+    </td>
+    <td align="center" width="50%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever"><img src="docs/gallery/case-golden-retriever.jpg" width="420" alt="A golden retriever puppy waking up"></a><br>
+      <strong>A puppy wakes up</strong><br><sub>Timed prompt · from sleeping to stirring</sub>
+    </td>
   </tr>
-</table>
-
-> **0.2.0 · general agent plugin**  
-> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); DSH also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools. The standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. The repository and the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) are both 0.2.0.
-
-## See it first
-
-<table>
   <tr>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-red-ball"><img src="docs/gallery/case-red-ball.jpg" width="300" alt="Five-second bouncing red ball validation clip"></a><br>
-      <strong>5-second pipeline check</strong><br>
-      <sub>red ball · native impact sound · 640×352</sub>
+    <td align="center" width="50%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-familyguy"><img src="assets/readme/case-familyguy-preview.webp" width="420" alt="Four family members watching TV in a living room"></a><br>
+      <strong>Changing the channel</strong><br><sub>Image to video · starts from a supplied frame</sub>
     </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-golden-retriever"><img src="docs/gallery/case-golden-retriever.jpg" width="300" alt="Golden retriever puppy waking up timeline-prompt example"></a><br>
-      <strong>Timeline prompt</strong><br>
-      <sub>puppy wakes up · motion + sound</sub>
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=case-familyguy"><img src="docs/gallery/case-familyguy.png" width="300" alt="Sitcom living-room channel-change image-to-video example"></a><br>
-      <strong>Image to video</strong><br>
-      <sub>locked first frame · channel change</sub>
+    <td align="center" width="50%">
+      <a href="https://rimagination.github.io/h3lite/?video=case-starship-jump"><img src="docs/gallery/case-starship-jump.jpg" width="420" alt="A captain standing on a blue-lit starship bridge"></a><br>
+      <strong>Starship jump</strong><br><sub>8-second text-to-video clip · cuts and jump sounds</sub>
     </td>
   </tr>
 </table>
 
-<p align="center"><a href="https://rimagination.github.io/h3lite/">More ZCode / Qoder examples and Set A route comparisons →</a></p>
+[Browse the full gallery, including ZCode and Qoder examples](https://rimagination.github.io/h3lite/) · [Compare Set A acceleration settings](https://rimagination.github.io/h3lite/?video=seta-lightx2v-compat)
 
-## Hand it to an agent in one minute
+<a name="quick-start"></a>
 
-Send the repository link to any agent (Codex, Claude Code, WorkBuddy, Qoder, DSH or ZCode):
+## <img src="assets/readme/section-02-quick-start.webp" width="100%" alt="02 Make your first clip">
 
-```text
-Please install H3 Lite and prepare a local MiniMax H3 video-generation environment for my computer:
-https://github.com/Rimagination/h3lite
-```
+Start on **Windows with an NVIDIA GPU**. H3 Lite runs ComfyUI on your computer and can reuse a working installation. Install the plugin and models separately. For model downloads, see [Hardware and models](#hardware-and-models).
 
-Choose a non-system drive in the same request when needed:
+### 1. Add H3 Lite to your AI assistant
 
-```text
-Install MiniMax H3 and ComfyUI under F:\MiniMax-H3. Reuse the environment if it is already healthy.
-```
+| Your assistant | Where to start |
+| --- | --- |
+| **Codex / Claude Code** | For a single clip, use the root [`SKILL.md`](SKILL.md) and keep its `scripts/`, `references/`, and `assets/` alongside it. For the full workflow, choose from the [six standalone skills](qoder-plugin/skills/). |
+| **Qoder** | Download the [v0.2.0 plugin ZIP](https://github.com/Rimagination/h3lite/releases/download/v0.2.0/h3lite-0.2.0.zip) and follow the [installation guide](qoder-plugin/README.md#安装与升级). |
+| **DeepSeek Harness** | Download or clone the repository. In **Plugins → Add plugin**, select the local `dsh-plugin` directory. [Setup guide](dsh-plugin/README.md#安装到-dsh) |
+| **Standard MCP client** | Run the bundled MCP server with Node.js and point it at your ComfyUI installation. [Launch and configuration](dsh-plugin/README.md#可选标准-mcp) |
 
-Initial setup time depends on model size, network, and storage speed; an existing healthy ComfyUI is reused.
+### 2. Check your machine before downloading models
 
-## Contents
-
-- [Hand it to an agent](#hand-it-to-an-agent-in-one-minute)
-- [Validated computers](#validated-computers-and-default-route)
-- [From brief to verified clip](#from-brief-to-verified-clip)
-- [Installation](#installation-target-and-component-downloads)
-- [Quick validation](#quick-validation-bouncing-red-ball)
-- [Prompting and examples](#generate-with-structured-prompts)
-
-## Validated computers and default route
-
-The primary route is Windows + NVIDIA + ComfyUI. GPU model, VRAM, system RAM, pagefile, storage, and laptop power limits affect speed. The lowest validated W4A8 configuration is an RTX 3060 Ti with 8 GB VRAM and 16 GB system RAM; 32 GB remains the recommended target.
-
-| Validated computer | GPU | CPU / RAM | Route and memory mode |
-|---|---|---|---|
-| MECHREVO Yilong15Pro laptop | RTX 4070 Laptop, 8 GB | Ryzen 7 8845H / 32 GB | `LOW_VRAM`; Set A validated for T2VA/I2VA and Set B compatibility graph validated for T2VA; native audio |
-| Windows 10 desktop | RTX 4060 Ti, 16 GB | i5-13400F / 32 GB | Set B; `NORMAL_VRAM`; T2VA/I2VA; native audio |
-
-With the same Set B models, compatibility workflow, prompt, seed, and `640×352 / 124 frames / 4 steps`:
-
-| GPU | ComfyUI execution time | Result |
-|---|---:|---|
-| RTX 4060 Ti 16 GB | 77.08 seconds | coherent video and native audio |
-| RTX 4070 Laptop 8 GB | 591.22 seconds | coherent video and native audio |
-
-The difference mainly comes from resident VRAM versus dynamic system-memory offload. The agent also considers RAM, storage, canvas, and time budget.
-
-Start with `fast`: four steps, native audio, and 640×352. Use `balanced` for six steps or `quality` for eight steps.
-
-### Set A route comparison
-
-These six clips use the same rolling-red-ball scene, prompt, Set A components, and `640×352 / 4 steps / native audio`; only the acceleration-node combination changes. Click a poster to open the player.
-
-Scenario: a small matte red rubber ball enters from the left, rolls right across grey concrete, and exits the frame.
-
-<table>
-  <tr>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-compat">
-        <img src="docs/gallery/seta-lightx2v-compat.jpg" width="280" alt="Set A LightX2V compatibility baseline">
-      </a><br>
-      <strong>Compatibility baseline</strong><br>
-      640×352 · 5 sec · native audio
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sage">
-        <img src="docs/gallery/seta-lightx2v-sage.jpg" width="280" alt="Set A LightX2V Sage">
-      </a><br>
-      <strong>Sage only</strong><br>
-      640×352 · 5 sec · native audio
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-ffn">
-        <img src="docs/gallery/seta-lightx2v-ffn.jpg" width="280" alt="Set A LightX2V FFN">
-      </a><br>
-      <strong>FFN only</strong><br>
-      640×352 · 5 sec · native audio
-    </td>
-  </tr>
-  <tr>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-blockcache">
-        <img src="docs/gallery/seta-lightx2v-blockcache.jpg" width="280" alt="Set A LightX2V Block Cache">
-      </a><br>
-      <strong>Block Cache only</strong><br>
-      640×352 · 5 sec · native audio
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-sol">
-        <img src="docs/gallery/seta-lightx2v-sol.jpg" width="280" alt="Set A LightX2V Sol">
-      </a><br>
-      <strong>Sol only</strong><br>
-      640×352 · 5 sec · native audio
-    </td>
-    <td align="center" width="33%">
-      <a href="https://rimagination.github.io/h3lite/?video=seta-lightx2v-all-accel">
-        <img src="docs/gallery/seta-lightx2v-all-accel.jpg" width="280" alt="Set A LightX2V full acceleration">
-      </a><br>
-      <strong>Full acceleration</strong><br>
-      Sage + Sol + FFN + Block Cache
-    </td>
-  </tr>
-</table>
-
-The player uses GitHub Pages, MP4 files under `docs/videos/`, and repository posters. The [`assets-rolling-redball` Release](https://github.com/Rimagination/h3lite/releases/tag/assets-rolling-redball) provides download copies of these six route clips.
-
-## From brief to verified clip
-
-For complex requests, H3 Lite follows: **intent route → reference/identity anchors → prompt enhancement → generation and verification**.
-
-| Goal or input | Preferred route | Key decision |
-|---|---|---|
-| Text describes the whole clip | `T2VA` | Establish the opening state, then write the audiovisual timeline. |
-| A specific opening image is supplied | `I2VA` | Anchor it at `0.00s` and describe forward motion only. |
-| Both endpoints are supplied | `FL2VA` | Describe a physically continuous path between the anchors. |
-| Several image/video/audio references are supplied | `Ref2VA` | Define each reference role, retention, allowed change, and forbidden drift first. |
-
-For characters or multi-shot work, the agent builds an anchor sheet for subjects, wardrobe, props, scene, lighting, and permitted changes. The same labels are reused in the prompt and run manifest. Incomplete Ref2VA components route the task to I2VA or an experimental workflow.
-
-The sheet is saved as `anchors.json`; `manifest.json` stores its path. `anchor_qa` compares first/middle/last frames with the references for continuity review.
-
-Prompt enhancement follows: intent → identity and scene → ordered action → camera and sound → drift constraints. The result is translated into H3's required fields.
-
-For vague briefs, use [`references/prompt-assist.md`](references/prompt-assist.md) to fill in scene, action, camera, and sound.
-
-## Quick validation: bouncing red ball
-
-After installation, use a simple five-second action with clear sound to verify the full pipeline:
+Paste this into an assistant that can access your files and run terminal commands.
 
 ```text
-Use H3 Lite to generate a 5-second landscape video. A small matte red rubber ball bounces twice on grey concrete, then rolls out of frame to the right. Use a locked-off low-angle camera, cold overcast daylight, shallow depth of field, and a 35mm cinematic look. Keep the sounds of the ball striking the ground twice and rolling across the concrete. No music.
+Read the README at https://github.com/Rimagination/h3lite.
+I want to make a five-second test clip with native audio. Check my GPU, RAM,
+disk space, and any existing ComfyUI installation. Recommend a component set
+and reuse a working installation. Tell me the download size and destination
+before downloading any models.
 ```
 
-[![H3 Lite bouncing red-ball video poster](docs/gallery/case-red-ball.jpg)](https://rimagination.github.io/h3lite/?video=case-red-ball)
+### 3. Render the five-second red-ball test
 
-Click the poster to open the player.
-
-This checks action count, motion direction, video muxing, and native audio.
-
-## Generate with structured prompts
-
-Organize a short-video prompt into three parts:
-
-1. **Scene and atmosphere**: subject, environment, lighting, framing, and style.
-2. **Action and camera**: actions in playback order and camera movement.
-3. **Sound**: ambience, physical sound, music, or dialogue.
-
-“No dialogue” keeps ambience and sound effects; “complete silence” disables audio.
-
-### Optional assist for vague briefs
-
-For a loose brief, define the visible result, one action, one camera move, and the sound bed. See [`references/prompt-assist.md`](references/prompt-assist.md).
-
-### Timeline prompt: golden retriever wakes up
+Check three things when it finishes. The ball bounces twice, you hear two impacts, and the MP4 plays.
 
 ```text
-Use H3 Lite to generate a 5-second video:
-
-[0s-2s] A golden retriever puppy sleeps curled up on a sunlit wooden floor, morning light streaming through a window, dust motes floating in the air.
-
-[2s-5s] The puppy slowly wakes up, stretches its front paws forward, yawns with a tiny squeak, then sits up and looks around with bright curious eyes as its tail starts wagging.
+Use H3 Lite to make a five-second 640×352 landscape clip with the fast profile
+and native audio. Use a fixed low-angle camera. A matte red rubber ball bounces
+twice on gray concrete, then rolls out of frame to the right. Keep the two
+impacts and the rolling sound. Leave out music. Return the MP4 path and check
+the duration, audio track, and motion.
 ```
 
-[![H3 Lite golden-retriever video poster](docs/gallery/case-golden-retriever.jpg)](https://rimagination.github.io/h3lite/?video=case-golden-retriever)
+<a name="production-workflow"></a>
 
-Click the poster to open the player.
+## <img src="assets/readme/section-03-workflow.webp" width="100%" alt="03 Make a short film">
 
-Timeline segments are easier to follow than packing many ordered actions into one sentence.
+**In v0.2.0 you can plan a short film, then generate, check, and edit it shot by shot.** If you need to work out a camera move or where someone should stand, try it first in a simple Blender scene. You can use that preview video as a motion reference.
 
-### Text to video: starship jump
+<p align="center">
+  <img src="assets/readme/pipeline.svg" width="100%" alt="H3 Lite production workflow: set up ComfyUI and models, plan shots and previs, render and verify each shot, then edit and deliver">
+</p>
 
-This eight-second T2VA example is adapted from MiniMax H3's reproducible cases:
+| What you want to do | Skill |
+| --- | --- |
+| Check your GPU and set up the models and ComfyUI | [`h3-workstation`](qoder-plugin/skills/h3-workstation/SKILL.md) |
+| Turn your scene, action, and sound into a prompt | [`h3-prompt`](qoder-plugin/skills/h3-prompt/SKILL.md) |
+| Plan the shots and keep characters, settings, and voices consistent | [`h3-director`](qoder-plugin/skills/h3-director/SKILL.md) |
+| Block the action in Blender and export a motion reference | [`h3-whitemodel`](qoder-plugin/skills/h3-whitemodel/SKILL.md) |
+| Generate shots and check frames, motion, and audio | [`h3-generate`](qoder-plugin/skills/h3-generate/SKILL.md) |
+| Assemble clips, add subtitles, adjust loudness, or upscale | [`h3-post`](qoder-plugin/skills/h3-post/SKILL.md) |
 
-```text
-Use H3 Lite to generate an 8-second 16:9 video. On the vast, dim bridge of a starship, a short-haired female captain stands with her back to the camera before a curved observation window. A massive dark fleet waits against a deep-purple nebula. The camera slowly pushes in as the fleet's blue engines intensify. At about 3.5 seconds, cut to a close-up of the captain. The fleet suddenly jumps to hyperspace; a white flash floods the bridge, the camera shakes violently, and the captain staggers before bracing herself. As the light fades, only the empty nebula remains and she slowly closes her eyes. Keep the low bridge hum, rising engine whine, hyperspace boom, and metallic vibration, with a swelling space-opera orchestral score.
-```
+For batch rendering, keep the shot list in `show.json` and recurring characters, voices, and settings in `canon.json`. The showrunner renders one shot at a time and skips shots that passed review when you resume. [Example multi-shot project](qoder-plugin/skills/h3-generate/assets/show.example.json)
 
-[![H3 Lite starship-jump video poster](docs/gallery/case-starship-jump.jpg)](https://rimagination.github.io/h3lite/?video=case-starship-jump)
+<details>
+<summary><strong>Save your ComfyUI path and resume a multi-shot project from the terminal</strong></summary>
 
-Click the poster to open the player.
-
-### Image to video: sitcom living-room channel change
-
-Download or attach the [example first frame](assets/examples/h3lite-i2va-familyguy-first-frame.png) and designate it as the first video frame. This example uses original characters and an original setting with bold outlines, flat cel colors, and exaggerated American adult-animation expressions. It demonstrates how I2VA can preserve the cast, wardrobe, and living-room composition while advancing a continuous action.
-
-![H3 Lite I2VA sitcom living-room example first frame](assets/examples/h3lite-i2va-familyguy-first-frame.png)
-
-Current example: `864×480 · 5 sec · 8 steps · Set A compatibility route · native audio`.
-
-```text
-Use H3 Lite to treat the image attached to this message as the first frame at 0 seconds and generate a 5-second landscape video. Preserve the original American adult-animation look, the four family members, their clothing, the living-room layout, the television position, the bold dark outlines, the flat cel colors, and the locked medium-wide composition. The father suddenly leans forward and points the remote at the television to change the channel; the mother crosses her arms and rolls her eyes; the son and daughter turn toward the father with exaggerated annoyed expressions. The TV glow flickers slightly and the popcorn bowl jiggles; end with the father proudly pointing at the screen while everyone else stares at him. Keep the television room tone, remote clicks, couch rustle, a small popcorn-bowl rattle, and brief nonverbal reactions, with light playful sitcom music and no intelligible dialogue.
-```
-
-[![H3 Lite 8-step sitcom living-room video poster](assets/examples/h3lite-i2va-familyguy-first-frame.png)](https://rimagination.github.io/h3lite/?video=case-familyguy)
-
-Click the poster to open the player.
-
-### Video and audio reference: pink suit and black lamb
-
-Download MiniMax's official [reference video](assets/examples/minimax-official-ref2va-pink-suit-black-lamb.mp4) and [male voice reference](assets/examples/minimax-official-ref2va-voice-reference.mp3), then attach both in the same message:
-
-```text
-Use H3 Lite to generate a 5-second video from the reference video and male voice sample attached to this message. Use the reference video as the visual, motion, and background-audio foundation, preserving the blond man, bright pink suit, black lamb in his arms, golden-hour pasture, distant white lambs, and original camera composition. Use only the separate male voice sample's timbre to generate new dialogue. Looking toward the camera, he naturally says, “Follow the wind, live free.” He then smiles peacefully, looks toward the horizon, and gently strokes the lamb as the camera slowly pushes in. Keep realistic motion and synchronize his lips to the English dialogue.
-```
-
-Asset provenance and checksums are recorded in [`assets/examples/sources.json`](assets/examples/sources.json).
-
-### Ref2VA: multiple image references
-
-Repeat `--ref-image` in the same order used by the prompt's `Picture 1`,
-`Picture 2`, and `Picture 3` labels. A practical arrangement is one master
-identity image plus separate scene, wardrobe/prop, or pose references. Do not
-ask every image to be copied in full:
+Run these commands from the repository root. Replace the example path with your actual ComfyUI directory. The first command saves it in `~/.h3lite/config.json`.
 
 ```powershell
-python scripts/h3_fastpath.py `
-  --comfyui F:\MiniMax-H3\ComfyUI `
-  --prompt-file prompts/ref2va.txt `
-  --ref-image identity.png `
-  --ref-image scene.png `
-  --ref-image wardrobe.png `
-  --mode ref2va `
-  --resolution 640x352 `
-  --profile fast `
-  --json
+python qoder-plugin/skills/h3-workstation/scripts/h3_doctor.py --comfyui "D:/MiniMax-H3/ComfyUI" --write-config
 ```
 
-The bundled Ref2VA graph keeps the ClipProj encoder in `resident` mode and uses
-more VRAM than I2VA. Start with one reference image on an 8 GB GPU.
-
-The native `MiniMaxH3ReferenceToVideo` node also accepts reference video and
-audio through a native ComfyUI workflow.
-
-## Installation target and component downloads
-
-### Choose the installation target first
-
-| Mode | Location | Best for |
-|---|---|---|
-| Reuse existing | Your existing `<ComfyUI>` | Preserving an installed environment |
-| Dedicated folder | For example `F:\MiniMax-H3\ComfyUI` | Recommended; keeps large files off the system drive and outside projects |
-| Current project | `<project>\.h3lite\ComfyUI` | Keeping the environment with one project |
-
-Choose the ComfyUI, model, custom-node, and output directories before downloading.
-
-### Choose one component set
-
-Choose one complete set. Each Baidu package contains matching models, nodes, workflows, and manifest:
-
-| Set | Validated starting point | Link | Code |
-|---|---|---|---|
-| Set A | RTX 4070 Laptop 8 GB + 32 GB RAM, low-VRAM fast route | [Baidu Netdisk](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) | `4hri` |
-| Set B | RTX 4060 Ti 16 GB + 32 GB RAM, FP8 compatibility route; T2VA also validated on RTX 4070 Laptop 8 GB | [Baidu Netdisk](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) | `1hjx` |
-
-Merge `models` and `custom_nodes` into `<ComfyUI>`, import the workflow JSON, and keep `component-manifest.json`. Upstream filenames and hashes are in [`references/component-sets.md`](references/component-sets.md).
-
-**Ref2VA uses the selected component set.** Its graph reuses the W4A8 model,
-text encoder, ClipProj, dual VAEs, and Turbo LoRA.
-
-### Manual skill installation
-
-Without agent installation, open the repository page and choose **Code → Download ZIP**. Extract it, place the `h3lite` folder in the Codex skills folder, and reopen Codex.
-
-## Watch progress without a browser
-
-On Windows, fastpath opens the native progress window by default. Use `--no-monitor-gui` for terminal-only runs. It reads ComfyUI's WebSocket progress channel and shows queueing, sampling, decoding, video writing, time, VRAM, RAM, pagefile, and output path.
-
-The window connects directly to ComfyUI and can also be opened independently:
+After preparing `show.json`, `canon.json`, and the reference files, use the next command to validate the plan and reference hashes before resuming unfinished shots.
 
 ```powershell
-python scripts/h3_monitor_gui.py `
-  --comfyui F:\MiniMax-H3\ComfyUI
+python qoder-plugin/skills/h3-generate/scripts/h3_showrunner.py --spec projects/ep01/show.json --strict --check-sha --resume
 ```
 
-The monitor understands `progress_state`, separates completed/active/pending nodes, and shows node time and ETA. Default size is `760x620` with a scrollbar. Use `--once --no-websocket` for diagnostics.
+Start with the [example `show.json`](qoder-plugin/skills/h3-generate/assets/show.example.json) and the [multi-shot project guide](qoder-plugin/skills/h3-generate/references/show-contract.md).
 
-## Component integrity
+</details>
 
-H3 Lite manages the diffusion model, text encoder, ClipProj, Turbo LoRA, dual VAEs, workflow, and node versions as one component set. Registered Set B files receive a SHA-256 check on first use or after a change; the result is cached.
+### Decide what to give the model
 
-### GPU contention with other heavy CUDA apps
+| What you want to control | What to give your assistant | Mode |
+| --- | --- | --- |
+| Create a scene from words | Describe the picture, action, and sound in playback order | `T2VA` |
+| Start from a specific image | The opening image and what happens next | `I2VA` |
+| Connect two images | The start and end frames, plus the action and camera move between them | `FL2VA` |
+| Reuse a character, movement, or voice | At least one reference image, optional video or audio, and a role for each reference | `Ref2VA` |
 
-ComfyUI keeps models resident even with an empty queue. Under recent Windows WDDM drivers `nvidia-smi --query-compute-apps` cannot report per-process memory, so CUDA can fail to allocate a few MiB while "8 GB is free" — or crash with an access violation (exit code 0xC0000005) instead of an OOM. Diagnose with `python scripts/h3_vram.py --json` (per-process dedicated VRAM via the WDDM counter) and gate with `--check-free-gb 5`; stop a competitor only after confirming its queue is idle, and remember an empty queue does not release resident models. See [references/gpu-contention.md](references/gpu-contention.md) for the measured case (ComfyUI holding 9.8 GB while a Topaz Video AI export failed) and the repair order.
+Try the [original first frame from the TV scene](assets/examples/h3lite-i2va-familyguy-first-frame.png) or view the [official MiniMax Ref2VA input example](https://rimagination.github.io/h3lite/?video=case-pink-lamb-reference). [Prompt guide and examples](qoder-plugin/skills/h3-prompt/references/prompt-writing.md)
 
-## Video upscale (post-processing, Topaz primary)
+<a name="hardware-and-models"></a>
 
-The low-VRAM H3 route validated by this repository is about 0.5 MP (960x544); that is not a global model or hardware limit. For 1080p/4K do not ask the model to generate wider — upscale is an explicit, user-requested post-processing step that never changes the generation graph. If Topaz Video AI is actually installed and licensed on the machine, use the models exposed by its own GUI; do not assume a model list, install path, or license state. Before exporting, inspect the target adapter scope with `scripts/h3_vram.py --json`, check ComfyUI `/queue`, and validate that weight files are complete rather than trusting filenames. After export, check the `videoai=Enhanced using ...` metadata tag and do not re-upscale an already-enhanced file.
+## <img src="assets/readme/section-04-hardware.webp" width="100%" alt="04 Pick hardware and models">
 
-Scriptable offline fallback: use FlashVSR only after discovering and validating the local root, Python environment, CLI fork/commit, and model pack. Invoke the actual absolute script path, for example `<FlashVSR_ROOT>\ComfyUI-FlashVSR_Stable\cli_main.py`; do not run a bare `cli_main.py` from an arbitrary working directory or assume another machine's launcher. The documented `--tile_size 256 --tile_overlap 64 --frame_chunk_size 50 --keep_models_on_cpu` values are measured case-study settings, not universal defaults. The CLI writes video-only output, so remux source audio with the ffmpeg executable discovered on this machine. ComfyUI venv + 4x-UltraSharp likewise requires the actual `<ComfyUI>\models\upscale_models\4x-UltraSharp.pth` and Python path. After any run, verify `nb_frames`, dimensions, frame rate, and audio stream with ffprobe. See [references/video-upscale.md](references/video-upscale.md).
+Choose a component set based on your **NVIDIA GPU's VRAM**. System RAM and the workflow also affect the resolution you can use. Start at 640×352 before trying a larger frame.
 
-## References
+| Where to start | Component set | Download |
+| --- | --- | --- |
+| **8 GB VRAM**, tested on an RTX 4070 Laptop with 32 GB RAM | **Set A** · Low VRAM | [Baidu Netdisk](https://pan.baidu.com/s/1IBlH0VY7tWGvxqMtniraow) · `4hri` |
+| **16 GB VRAM**, tested on an RTX 4060 Ti with 32 GB RAM | **Set B** · FP8 compatibility | [Baidu Netdisk](https://pan.baidu.com/s/1x5GGuJv0h8chApgVoDgIaQ) · `1hjx` |
+| **16 GB with acceleration**, install Set B first | **Set C** · Selected automatically at supported resolutions when its components are present | [Downloads and checksums](qoder-plugin/README.md#set-c-资产网盘) |
 
-- [MiniMax H3 ComfyUI tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3)
-- [MiniMax-H3 official repository](https://github.com/MiniMax-AI/MiniMax-H3)
-- [H3 prompt-writing skill](https://github.com/MiniMax-AI/MiniMax-H3/tree/main/skills/h3-prompt-writing)
-- [Agent workflow reference: routing, anchors, prompt enhancement, and verification](references/agent-workflow.md)
-- [Higgsfield public agent skills (design reference)](https://github.com/higgsfield-ai/skills)
-- [Higgsfield prompt templates and generator (writing aid)](references/prompt-assist.md)
-- [Complete component sets and checksums](references/component-sets.md)
-- [Hardware, resolution, and deployment matrix](references/deployment-matrix.md)
+If you use Ref2VA with Set C, install the additional reference-generation weights listed in the download guide.
 
-## License
+### How much time can Set C save?
 
-H3 Lite is released under the MIT License. MiniMax model weights, ComfyUI, third-party custom nodes, and upstream documentation remain subject to their respective licenses.
+On one RTX 4060 Ti 16 GB, total time for a **640×352, 124-frame, four-step** clip went from **52.68 s** to **22.91 s**. Resolution, shot length, and hardware all affect render time. [Test conditions and other resolutions](qoder-plugin/skills/h3-workstation/references/deployment-matrix.md#validated-16-gb-acceleration-ladder-2026-11-19-set-c-overlay)
 
-## Community Support
+<p align="center">
+  <img src="assets/readme/set-c-timing.svg" width="100%" alt="RTX 4060 Ti 16 GB comparison. The baseline took 52.68 seconds, and the full Set C configuration took 22.91 seconds.">
+</p>
 
-- [Linux.do](https://linux.do/)
+<details>
+<summary><strong>Platform support, grid seams, and VRAM troubleshooting</strong></summary>
+
+- **Other platforms.** Apple Silicon users can try the independent [community MLX port](https://huggingface.co/yunfengwang/mmh3turbo-bundles). The H3 Lite workflow is unverified on Linux with NVIDIA and on Intel Macs.
+- **A grid appears on smooth backgrounds.** Set C's Sol VAE can leave 128 px seams. Run `h3_grid_check.py` and try the standard FP16 video VAE via `--video-vae` if the check flags suspected seams. [Components and test results](qoder-plugin/skills/h3-workstation/references/component-sets.md)
+- **An RTX 50-series GPU produces fixed textures or ignores prompts.** Test two prompts at a small resolution with the same seed. If the quantized route shows the issue, see the [Blackwell troubleshooting guide](qoder-plugin/skills/h3-workstation/references/deployment-matrix.md#blackwell-and-quantized-h3-known-upstream-risk) for the FP8 DiT workaround.
+- **A render runs out of VRAM or stalls.** Render one shot at a time on the 16 GB route. Check other CUDA processes and models still in memory. Split long videos into shots and keep the per-shot manifests. [GPU contention guide](qoder-plugin/skills/h3-workstation/references/gpu-contention.md)
+
+</details>
+
+## Documentation and license
+
+- [Models and nodes](qoder-plugin/skills/h3-workstation/references/component-sets.md) · [Deployment matrix](qoder-plugin/skills/h3-workstation/references/deployment-matrix.md) · [Upscaling and delivery](qoder-plugin/skills/h3-post/references/video-upscale.md)
+- [MiniMax H3 upstream repository](https://github.com/MiniMax-AI/MiniMax-H3) · [Official ComfyUI tutorial](https://docs.comfy.org/tutorials/video/minimax/minimax-h3) · [GitHub Issues](https://github.com/Rimagination/h3lite/issues)
+
+This repository uses the [MIT License](LICENSE). MiniMax weights, ComfyUI, and third-party nodes have their own upstream licenses.
+
+## Author card
+
+<p align="center">
+  <a href="assets/readme/author-card.webp">
+    <img src="assets/readme/author-card.webp" alt="Rimagination's author card with GitHub handle and personal WeChat QR code" width="800">
+  </a>
+</p>
+
+## Star History
+
+<p align="center">
+  <a href="https://www.star-history.com/?repos=Rimagination%2Fh3lite&amp;type=date&amp;legend=top-left">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Rimagination%2Fh3lite&amp;type=date&amp;legend=top-left&amp;theme=dark">
+      <img alt="H3 Lite GitHub star history" src="https://api.star-history.com/svg?repos=Rimagination%2Fh3lite&amp;type=date&amp;legend=top-left" width="720">
+    </picture>
+  </a>
+</p>
+
+[Open the interactive Star History chart](https://www.star-history.com/?repos=Rimagination%2Fh3lite&type=date&legend=top-left)

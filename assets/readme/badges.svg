@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="544" height="30" viewBox="0 0 544 30"
+     role="img" aria-labelledby="title">
+  <title id="title">License MIT, hosts Skill and MCP, route Low-VRAM Fast</title>
+
+  <path fill="#515151" d="M0 0h79v30H0zM139 0h73v30h-73zM339 0h67v30h-67z"/>
+  <rect x="79" width="55" height="30" fill="#1f5e4a"/>
+  <rect x="212" width="122" height="30" fill="#4b6b8a"/>
+  <rect x="406" width="138" height="30" fill="#d9a441"/>
+
+  <g font-family="Consolas, 'Liberation Mono', monospace" font-size="14.5" letter-spacing="1"
+     text-anchor="middle" fill="#fff">
+    <text x="40" y="20">LICENSE</text>
+    <text x="176" y="20">HOSTS</text>
+    <text x="373" y="20">ROUTE</text>
+    <g font-weight="700">
+      <text x="107" y="20">MIT</text>
+      <text x="273" y="20">SKILL + MCP</text>
+      <text x="475" y="20" fill="#231900">LOW-VRAM FAST</text>
+    </g>
+  </g>
+</svg>
