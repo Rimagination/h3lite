@@ -20,6 +20,8 @@ description: 安装、迁移、体检、修复本机 MiniMax H3 / ComfyUI 环境
 
 非 Windows 用户保留跨平台有用的部分（提示词结构、32 像素对齐、低分辨率预览、磁盘/日志检查），但每个资源与耗时都要标注平台属性。
 
+宿主无关：同一份 `skills/` 可由 Qoder、DeepSeek Harness、Claude Code、Codex 或 ZCode 复用；DSH 通过 `dsh-plugin/index.js` 注册六个 skill 和 `h3_generate/h3_status/h3_doctor/h3_list_runs` 四个原生工具，路径仍从 `~/.h3lite/config.json` 或 `H3LITE_*` 读取。
+
 ## 安装目标契约
 
 下载或移动任何组件前，先确定并复述一个目标：
@@ -37,6 +39,25 @@ Output: <ComfyUI>\output
 - `dedicated-folder`：用户给的绝对路径，优先非仓库盘（例如 `<fast-disk>:\AI\MiniMax-H3\ComfyUI`）。
 - 没有现成安装也没有目标路径时，先推荐专用目录并请用户确认，不得静默选盘或装进项目根。
 - 不把本机路径写死到脚本或工作流；不覆盖已有安装、不静默替换模型文件。
+
+### 机器级路径持久化（新任务不再“未安装”）
+
+Qoder / WorkBuddy / DSH 新开任务可能换工作区、丢掉上一任务的安装上下文。H3 Lite 不依赖会话记忆，按以下顺序找 ComfyUI：
+
+```text
+--comfyui  >  H3LITE_COMFYUI  >  ~/.h3lite/config.json  >  <project>/ComfyUI  >  ~/ComfyUI
+```
+
+体检通过后写入一次机器级配置：
+
+```powershell
+python scripts/h3_doctor.py --comfyui <ComfyUI> --write-config
+```
+
+- 写入 `~/.h3lite/config.json` 的 `{"comfyui": "<absolute path>"}`；可用 `H3LITE_CONFIG` 换配置文件位置。
+- 新任务先跑 `h3_doctor.py --json` 看 `comfyui.source`（`config:` / `env:` / `root:` / `explicit`）。**source 不是 `not-found` 就复用现有安装，禁止再引导下载 11–15 GB 的 ComfyUI 包。**
+- 只有确实没有有效根目录（缺 `main.py` 或 `models/`）时，才按安装契约询问路径；拿到路径后先 `--write-config`，再谈安装。
+- 多套 ComfyUI 并存时不要靠“最后写入者”猜：用 `--comfyui` 显式指定，或给不同任务设不同的 `H3LITE_CONFIG`。
 
 ## 冷路径顺序
 
@@ -61,6 +82,7 @@ python scripts/h3_doctor.py --json `
 - 低内存/低显存只是警告：8 GB 路线可在 offload 下完成。
 - **页面文件接近耗尽必须阻止**：它曾导致 `hostbuf_file_reader_read failed` 与系统级分页失败，`h3_preflight.py` 会直接 blocked。
 - 没有 NVIDIA CUDA 设备时，不承诺本地方案，说明限制并给替代后端。
+- **Blackwell + 量化 H3 是已知上游风险**：医生看到 RTX 50 系（sm_120）且 `diffusion_models` 里有 W4A8/INT8/convrot 权重时，`blackwell_quantized.status=risk` 并给出警告。先跑 640x352、4 步、两条不同提示词的文本影响测试；若输出固定纹理/换词不变，只把 `UNETLoader` 换成 `minimax_h3_fl2va_pruned_fp8_scaled.safetensors`，TE/LoRA/VAE 不动。证据与链接见 `references/deployment-matrix.md` 的“Blackwell 与量化 H3”一节。
 
 ## 2. 选档
 

@@ -26,8 +26,10 @@ python scripts/h3_show_validate.py --spec projects/ep04/show.json --check-sha --
 ## 前置
 
 - 医生报告缓存不超过 30 分钟，且 ComfyUI 在 `http://127.0.0.1:8188` 健康；已健康就复用，不重启、不重新发现工作流。
+- 不传 `--comfyui` 时，解析顺序是 `H3LITE_COMFYUI` → `~/.h3lite/config.json` → 输出目录的父级（`output/`）→ 当前目录/`~/ComfyUI`。新任务先看 `comfyui_source`；解析到现有安装就不要引导用户重装。
 - 同一配置的 manifest 处于 `submitting`/`queued`/`running` 时**不得重复提交**；返回已有 prompt ID。只有用户明确要求第二条相同任务时才 `--allow-duplicate`。
 - 不在热路径里查 Git、模型哈希、依赖版本或官方文档；只有上一条命令给出具体错误指向那里时才查。
+- **RTX 50 系 + W4A8/INT8**：脚本会在提交前打印 Blackwell 量化内核警告（`runtime_warnings`）。先按提示跑两条不同提示词的 640x352/4 步对比；文本无影响时只换 DiT 为 `minimax_h3_fl2va_pruned_fp8_scaled.safetensors`，不要继续长渲染。
 
 ## 一条命令的默认路径
 
@@ -260,6 +262,7 @@ python scripts/h3_showrunner.py --spec projects/ep04/show.json `
 7. 提示词或参考对齐问题。
 
 - 黑屏/马赛克：恢复官方 H3 flow/sigma-shift 节点，简化可选 attention/cache 补丁。
+- 50 系固定纹理 / 换提示词不变 / 数值爆炸：这是 Blackwell + W4A8/INT8 convrot 的上游内核问题，不是提示词问题。按 `h3-workstation/references/deployment-matrix.md` 的文本影响测试处理；绕行只换 DiT 到 fp8_scaled。
 - 4 步音频失真：检查视频/音频 schedule，必要时用兼容 Turbo 采样器。
 - 同尺寸损坏的 W4A8 会产生彩色马赛克：按完整性记录重验哈希，不要只看字节数。
 - 第二次运行更快不等于复用了结果：权重常驻/上游节点缓存会加速，但改提示词或种子仍会重新采样。

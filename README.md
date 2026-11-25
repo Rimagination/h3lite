@@ -6,17 +6,17 @@
 
 <p align="center">
   <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1F5E4A?style=for-the-badge">
-  <img alt="Hosts Codex" src="https://img.shields.io/badge/Hosts-Codex-4B6B8A?style=for-the-badge">
+  <img alt="Hosts Any Agent" src="https://img.shields.io/badge/Hosts-Any%20Agent-4B6B8A?style=for-the-badge">
   <img alt="Route Low VRAM Fast" src="https://img.shields.io/badge/Route-Low--VRAM%20Fast-D9A441?style=for-the-badge">
 </p>
 
 <p align="center">中文 | <a href="README.en.md">English</a> | <a href="#参考资料">参考资料</a></p>
 
-`H3 Lite` 是给 Codex、WorkBuddy 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。描述想看的画面后，Agent 会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
+`H3 Lite` 是给 Codex、Claude Code、WorkBuddy、Qoder、DeepSeek Harness、ZCode 等 AI Agent 使用的 MiniMax H3 本地视频生成 Skill。描述想看的画面后，Agent 会根据电脑配置选择 ComfyUI 路线、准备组件、生成带原生声音的视频并检查结果。
 
-> **Qoder 插件 0.2.0（2026-11-25）**  
-> 本仓库同时发布 Qoder 插件生产版：[`qoder-plugin/`](qoder-plugin/README.md)。它把 H3 Lite 拆成六个 skill（环境/提示词/导演/生成/后期/白模），并加入 Set C 自动路由、开拍前合同、showrunner、原生 `--ref-video`、Blender/MCP、FaceRefine 经验与 Sol VAE 128px 网格修复。  
-> 安装包见 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)；根目录的单体 `SKILL.md` 继续保留给 Codex/WorkBuddy。
+> **通用 Agent 插件 0.2.1（2026-11-26）**  
+> 同一套六个 skill（环境/提示词/导演/生成/后期/白模）按宿主分发：[`qoder-plugin/`](qoder-plugin/README.md) 是 Qoder 包；[`dsh-plugin/`](dsh-plugin/README.md) 是 DeepSeek Harness 包，并额外注册 `h3_generate`、`h3_status`、`h3_doctor`、`h3_list_runs` 四个原生工具。  
+> 同一套 `skills/` 与脚本也可直接给 Codex、Claude Code、WorkBuddy、ZCode 使用；标准 MCP 入口在 `dsh-plugin/runtime/h3-mcp-server.cjs`。仓库当前版本 0.2.1，安装包仍可参考 [Release v0.2.0](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0)。
 
 ## 模型定位与适用范围
 

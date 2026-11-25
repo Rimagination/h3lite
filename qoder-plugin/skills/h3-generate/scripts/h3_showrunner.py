@@ -25,6 +25,8 @@ import sys
 import time
 from typing import Any
 
+from h3_paths import find_comfyui
+
 SCRIPTS = Path(__file__).resolve().parent
 GENERATE = SCRIPTS / "h3_generate.py"
 STATUS = SCRIPTS / "h3_status.py"
@@ -313,6 +315,12 @@ def main() -> int:
     args = parse_args()
     spec_path = Path(args.spec).expanduser().resolve()
     project_root = Path(args.project_root).expanduser().resolve() if args.project_root else spec_path.parent
+    if not args.comfyui:
+        resolved_comfyui, comfyui_source = find_comfyui(None, project_root)
+        if resolved_comfyui is not None:
+            args.comfyui = str(resolved_comfyui.resolve())
+            if not args.json:
+                print(f"comfyui: {args.comfyui} (source: {comfyui_source})")
     run_root = Path(args.run_root).expanduser().resolve() if args.run_root else (project_root / "runs")
     manifest_path = Path(args.manifest).expanduser().resolve() if args.manifest else (project_root / "show_manifest.json")
 

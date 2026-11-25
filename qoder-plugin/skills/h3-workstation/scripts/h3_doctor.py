@@ -22,7 +22,13 @@ import sys
 import hashlib
 from typing import Any, Iterable
 
-from h3_paths import normalize_windows_path
+from h3_paths import (
+    default_config_path,
+    find_comfyui,
+    is_comfyui_root,
+    normalize_windows_path,
+    save_config,
+)
 
 
 CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
@@ -323,6 +329,94 @@ def model_report(comfyui: Path | None) -> dict[str, Any]:
     return {"available": True, "root": str(comfyui), "assets": assets}
 
 
+QUANTIZED_DIT_RE = re.compile(r"(w4a8|w6a8|int8|convrot)", re.IGNORECASE)
+FP8_DIT_RE = re.compile(r"fp8(_scaled)?", re.IGNORECASE)
+BLACKWELL_NAME_RE = re.compile(r"RTX\s*50\d0|B[12]00|Blackwell", re.IGNORECASE)
+
+
+def blackwell_devices(report: dict[str, Any]) -> list[str]:
+    """Return Blackwell GPU names seen through nvidia-smi or a Torch probe."""
+    names: list[str] = []
+    for gpu in report.get("gpus", []):
+        if not isinstance(gpu, dict):
+            continue
+        name = str(gpu.get("name") or "")
+        if BLACKWELL_NAME_RE.search(name):
+            names.append(name)
+    for probe in report.get("python_probes", []):
+        if not isinstance(probe, dict):
+            continue
+        for device in probe.get("torch_devices", []) or []:
+            if not isinstance(device, dict):
+                continue
+            capability = device.get("capability")
+            name = str(device.get("name") or "")
+            if (isinstance(capability, list) and capability[:2] in ([12, 0], [12, 1])) or BLACKWELL_NAME_RE.search(name):
+                names.append(name or "Blackwell GPU")
+    return sorted(set(item for item in names if item))
+
+
+def blackwell_quantized_risk(report: dict[str, Any]) -> dict[str, Any]:
+    """Flag the upstream sm_120 + W4A8/INT8 convrot failure before GPU time.
+
+    RTX 50-series cards can load and sample quantized H3 checkpoints while
+    ignoring text conditioning or producing a fixed texture. The failure is in
+    comfy-kitchen's convrot kernel path, not in H3Lite's workflows, so this is
+    a warning plus a single-variable workaround rather than a hard block.
+    """
+    devices = blackwell_devices(report)
+    if not devices:
+        return {"status": "not-applicable", "devices": [], "checkpoints": []}
+
+    models = report.get("models") if isinstance(report.get("models"), dict) else {}
+    assets = models.get("assets") if isinstance(models.get("assets"), dict) else {}
+    if not assets:
+        return {"status": "unknown", "devices": devices, "checkpoints": [], "reason": "model scan disabled"}
+
+    checkpoints: list[str] = []
+    fp8_candidates: list[str] = []
+    for role in ("low_vram_diffusion", "native_diffusion"):
+        asset = assets.get(role)
+        if not isinstance(asset, dict):
+            continue
+        for found in asset.get("found", []):
+            if not isinstance(found, dict):
+                continue
+            name = Path(str(found.get("path", ""))).name
+            if QUANTIZED_DIT_RE.search(name):
+                checkpoints.append(name)
+            elif FP8_DIT_RE.search(name):
+                fp8_candidates.append(name)
+    if not checkpoints:
+        return {"status": "clear", "devices": devices, "checkpoints": [], "fp8_checkpoints": sorted(set(fp8_candidates))}
+
+    message = (
+        "Blackwell GPU detected ("
+        + ", ".join(devices)
+        + ") together with quantized H3 DiT checkpoint(s): "
+        + ", ".join(sorted(set(checkpoints)))
+        + ". Upstream reports fixed woven texture, identical output for different prompts, "
+        "and numerical blowup on RTX 5060 Ti 16 GB with the int8/convrot kernel path "
+        "(Comfy-Org/comfy-kitchen#163, #120; Comfy-Org/ComfyUI#17098; 0.2.38 did not fix it, "
+        "RTX 5090 did not reproduce). Before committing a long render, run a 640x352 4-step "
+        "text-influence check with two different prompts. If text has zero effect, switch ONLY "
+        "the DiT/UNETLoader to minimax_h3_fl2va_pruned_fp8_scaled.safetensors and keep the "
+        "text encoder, LoRA and VAE unchanged; do not treat Set C/W4A8 as validated on sm_120 yet."
+    )
+    return {
+        "status": "risk",
+        "devices": devices,
+        "checkpoints": sorted(set(checkpoints)),
+        "fp8_checkpoints": sorted(set(fp8_candidates)),
+        "message": message,
+        "references": [
+            "https://github.com/Comfy-Org/comfy-kitchen/issues/163",
+            "https://github.com/Comfy-Org/comfy-kitchen/issues/120",
+            "https://github.com/Comfy-Org/ComfyUI/issues/17098",
+        ],
+    }
+
+
 def normalized(value: str) -> str:
     return re.sub(r"[^a-z0-9]", "", value.lower())
 
@@ -416,6 +510,9 @@ def runtime_compatibility(report: dict[str, Any]) -> dict[str, Any]:
                         f"{device.get('name', 'Blackwell GPU')} requires a Torch build containing sm_120; "
                         "update the ComfyUI environment before using the RTX 50-series acceleration path."
                     )
+    risk = report.get("blackwell_quantized")
+    if isinstance(risk, dict) and risk.get("status") == "risk" and risk.get("message"):
+        warnings.append(str(risk["message"]))
     return {"status": "error" if errors else ("caution" if warnings else "ready"), "errors": errors, "warnings": warnings}
 
 
@@ -462,12 +559,14 @@ def choose_profile(gpus: list[dict[str, Any]], memory: dict[str, Any], disk: dic
 
 def build_report(args: argparse.Namespace) -> dict[str, Any]:
     root = normalize_windows_path(args.root).resolve() if args.root else Path.cwd().resolve()
-    comfyui = normalize_windows_path(args.comfyui).resolve() if args.comfyui else None
-    if comfyui is None:
-        for candidate in (root / "ComfyUI", root / "comfyui", root):
-            if (candidate / "main.py").exists() and (candidate / "models").exists():
-                comfyui = candidate
-                break
+    comfyui, comfyui_source = find_comfyui(args.comfyui, root)
+    if comfyui is not None:
+        comfyui = comfyui.resolve()
+        if not args.root:
+            # The disk that matters for models, cache and output is the
+            # ComfyUI drive, not whichever task workspace happened to start
+            # the doctor. Keep an explicit --root authoritative.
+            root = comfyui
 
     gpus = nvidia_gpus()
     gpu_processes = nvidia_processes()
@@ -480,7 +579,13 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
         "platform": {"system": platform.system(), "release": platform.release(), "machine": platform.machine()},
         "runtime": {"invoked_python": sys.version.split()[0], "cwd": str(Path.cwd().resolve())},
         "root": str(root),
-        "comfyui": {"path": str(comfyui) if comfyui else None, "exists": bool(comfyui and comfyui.exists()), "main_py": bool(comfyui and (comfyui / "main.py").exists())},
+        "comfyui": {
+            "path": str(comfyui) if comfyui else None,
+            "exists": bool(comfyui and comfyui.exists()),
+            "main_py": bool(comfyui and (comfyui / "main.py").exists()),
+            "source": comfyui_source,
+            "config": str(default_config_path()),
+        },
         "gpus": gpus,
         "gpu_processes": gpu_processes,
         "system_memory": memory,
@@ -491,6 +596,7 @@ def build_report(args: argparse.Namespace) -> dict[str, Any]:
     }
     report["recommendation"] = choose_profile(gpus, memory, disk)
     report["environment_fingerprint"] = environment_fingerprint(report, comfyui)
+    report["blackwell_quantized"] = blackwell_quantized_risk(report)
     report["runtime_compatibility"] = runtime_compatibility(report)
     return report
 
@@ -502,7 +608,11 @@ def print_human(report: dict[str, Any]) -> None:
         print(f"- {reason}")
     print(f"Root: {report['root']}")
     comfyui = report["comfyui"]
-    print(f"ComfyUI: {comfyui.get('path') or 'not found'}")
+    print(f"ComfyUI: {comfyui.get('path') or 'not found'} (source: {comfyui.get('source', 'unknown')})")
+    print(f"Config: {comfyui.get('config')}")
+    risk = report.get("blackwell_quantized")
+    if isinstance(risk, dict) and risk.get("status") == "risk":
+        print("WARNING: " + str(risk.get("message")))
     for gpu in report["gpus"]:
         if "error" in gpu:
             print(f"GPU: {gpu['error']} ({gpu.get('detail', '')})")
@@ -536,12 +646,30 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--comfyui", help="explicit ComfyUI directory")
     parser.add_argument("--no-model-scan", action="store_true", help="skip recursive model filename scan")
     parser.add_argument("--no-node-scan", action="store_true", help="skip custom_nodes scan")
+    parser.add_argument(
+        "--write-config",
+        action="store_true",
+        help="persist the resolved ComfyUI path to ~/.h3lite/config.json so new tasks do not lose it",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     report = build_report(args)
+    if args.write_config:
+        resolved = report.get("comfyui", {}).get("path")
+        if not resolved or not is_comfyui_root(Path(str(resolved))):
+            print(
+                "ERROR: cannot write config: no valid ComfyUI root (need main.py and models/). "
+                "Pass --comfyui <ComfyUI> or set H3LITE_COMFYUI.",
+                file=sys.stderr,
+            )
+            return 2
+        target = save_config({"comfyui": str(resolved)})
+        report["config_written"] = {"path": str(target), "comfyui": str(resolved)}
+        if not args.json:
+            print(f"Wrote {target}: comfyui={resolved}")
     if args.report_file:
         report_path = Path(args.report_file).expanduser().resolve()
         report_path.parent.mkdir(parents=True, exist_ok=True)

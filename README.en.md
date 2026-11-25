@@ -6,7 +6,7 @@
 
 <p align="center">
   <img alt="License MIT" src="https://img.shields.io/badge/License-MIT-1F5E4A?style=for-the-badge">
-  <img alt="Hosts Codex" src="https://img.shields.io/badge/Hosts-Codex-4B6B8A?style=for-the-badge">
+  <img alt="Hosts Any Agent" src="https://img.shields.io/badge/Hosts-Any%20Agent-4B6B8A?style=for-the-badge">
   <img alt="Route Low VRAM Fast" src="https://img.shields.io/badge/Route-Low--VRAM%20Fast-D9A441?style=for-the-badge">
 </p>
 
@@ -14,7 +14,11 @@
   <a href="README.md">中文</a> | English | <a href="#references">References</a>
 </p>
 
-`H3 Lite` is a MiniMax H3 local video-generation skill for AI agents such as Codex and WorkBuddy. Describe the clip you want, and the agent selects a ComfyUI route, prepares the components, generates native video and audio, and verifies the result.
+`H3 Lite` is a MiniMax H3 local video-generation skill for AI agents such as Codex, Claude Code, WorkBuddy, Qoder, DeepSeek Harness and ZCode. Describe the clip you want, and the agent selects a ComfyUI route, prepares the components, generates native video and audio, and verifies the result.
+
+> **General agent plugin 0.2.1 (2026-11-26)**  
+> The same six skills ship as a Qoder bundle ([`qoder-plugin/`](qoder-plugin/README.md)) and a DeepSeek Harness bundle ([`dsh-plugin/`](dsh-plugin/README.md)); the DSH bundle also registers the native `h3_generate`, `h3_status`, `h3_doctor` and `h3_list_runs` tools.  
+> The same `skills/` and scripts work with Codex, Claude Code, WorkBuddy and ZCode; the standard MCP entry is `dsh-plugin/runtime/h3-mcp-server.cjs`. Current repository version is 0.2.1; the [v0.2.0 release](https://github.com/Rimagination/h3lite/releases/tag/v0.2.0) remains available as an older package.
 
 ## Hand it to an agent in one minute
 

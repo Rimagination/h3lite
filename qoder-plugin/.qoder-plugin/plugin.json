@@ -1,7 +1,7 @@
 {
   "name": "h3lite",
-  "version": "0.2.0",
-  "description": "Local MiniMax H3 production suite: environment setup, prompt craft, storyboarding, generation, post-production, and Blender white-model previz with direct Ref2VA motion-reference handoff. Adds a pre-flight show contract (show.json/canon.json), batch showrunner with resume, native --ref-video wiring, Set C asset verification, explicit cache/QA reuse, and 16 GB measured-canvas Set C auto-routing that blocks unsafe or under-specified renders before GPU time.",
+  "version": "0.2.1",
+  "description": "Local MiniMax H3 production suite: environment setup, prompt craft, storyboarding, generation, post-production, and Blender white-model previz with direct Ref2VA motion-reference handoff. Adds a pre-flight show contract (show.json/canon.json), batch showrunner with resume, native --ref-video wiring, Set C asset verification, explicit cache/QA reuse, 16 GB measured-canvas Set C auto-routing, machine-level ComfyUI path reuse for new tasks, and a Blackwell quantized-kernel risk guard before GPU time.",
   "author": { "name": "Liang Ren" },
-  "keywords": ["qoder-plugin", "minimax-h3", "comfyui", "video-generation", "short-drama", "blender", "previz", "white-model", "motion-reference", "ref2va", "show-contract", "preflight", "auto-routing"]
+  "keywords": ["qoder-plugin", "dsh-plugin", "deepseek-harness", "minimax-h3", "comfyui", "video-generation", "short-drama", "blender", "previz", "white-model", "motion-reference", "ref2va", "show-contract", "preflight", "auto-routing"]
 }

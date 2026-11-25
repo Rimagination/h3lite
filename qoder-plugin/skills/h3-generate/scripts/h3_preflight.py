@@ -163,6 +163,12 @@ def assess_runtime_risk(report: dict[str, Any], plan: dict[str, Any] | None = No
     errors.extend(str(item) for item in compatibility.get("errors", []) if item)
     warnings.extend(str(item) for item in compatibility.get("warnings", []) if item)
 
+    blackwell_risk = report.get("blackwell_quantized") if isinstance(report.get("blackwell_quantized"), dict) else {}
+    checks["blackwell_quantized"] = blackwell_risk.get("status", "unknown")
+    risk_message = blackwell_risk.get("message") if blackwell_risk.get("status") == "risk" else None
+    if risk_message and str(risk_message) not in warnings:
+        warnings.append(str(risk_message))
+
     if plan and isinstance(plan.get("warnings"), list):
         plan_warnings = [str(item) for item in plan["warnings"]]
         if any("OOM" in item or "page" in item.lower() for item in plan_warnings):

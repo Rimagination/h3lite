@@ -9,6 +9,41 @@ This reference is for a Windows workstation running ComfyUI with an NVIDIA GPU. 
 - RTX 50-series cards need a current Torch/CUDA build containing the matching Blackwell architecture (for example `sm_120`) before optional acceleration nodes are enabled. The doctor performs this check without loading the video model.
 - These checks run during doctor/preflight only. They must not add nodes, sampling steps, model passes, or generation-time work to an otherwise valid graph.
 
+### Blackwell and quantized H3 (known upstream risk)
+
+RTX 50-series (`sm_120`) plus a W4A8/INT8/convrot H3 DiT is currently **not a validated combination**, even when Torch has sm_120 and comfy-kitchen imports cleanly. Upstream reports on RTX 5060 Ti 16 GB show the sampler completing with no error while producing a fixed woven texture, byte-identical output for different prompts, and numerical blowup after the DiT blocks:
+
+- comfy-kitchen #163 (same 5060 Ti; W4A8 and INT8 produce identical frames)
+- comfy-kitchen #120 (GPU lost with INT8 attention on sm_120)
+- ComfyUI #17098 (quantized H3 and Qwen-Image output noise on sm_120)
+- comfy-kitchen 0.2.38 did not fix the convrot path; an RTX 5090 did not reproduce it
+
+The doctor now reports `blackwell_quantized.status=risk` when it sees a 50-series GPU together with `minimax_h3*w4a8*` / `*int8*` / `*convrot*` diffusion weights, and `h3_preflight.py` carries that warning into `checks.blackwell_quantized`. The generator also warns when the selected workflow's `UNETLoader` uses such a weight. None of these hard-block, because the failure is upstream and machine-specific.
+
+Text-influence smoke test before a long render:
+
+1. Use `640x352`, 4 steps, same seed, and two clearly different prompts (for example mountain lake vs sports car).
+2. Compare frames at 0/30/60/90 or MD5; two prompts must not be byte-identical.
+3. If text has zero influence, switch **only** the DiT to `minimax_h3_fl2va_pruned_fp8_scaled.safetensors`; keep the text encoder, ClipProj, LoRA and VAE unchanged. The upstream reporter confirmed this produces clean output on the same 5060 Ti.
+4. Do not switch the Sol INT8 VAE to Sol fp16 for this issue; the 128px grid seam is a separate VAE problem.
+5. Record the tested checkpoint, comfy-kitchen version, Torch build and verdict in the run manifest; a later comfy-kitchen release must be retested, not assumed fixed.
+
+### Machine-level ComfyUI path (new tasks)
+
+A new Qoder/WorkBuddy/DSH task may start in a different workspace and forget which ComfyUI was installed. The path resolver is intentionally independent of the task folder:
+
+```text
+--comfyui > H3LITE_COMFYUI > ~/.h3lite/config.json > <project>/ComfyUI > ~/ComfyUI
+```
+
+Persist a validated root once:
+
+```powershell
+python scripts/h3_doctor.py --comfyui <ComfyUI> --write-config
+```
+
+`h3_doctor.py --json` reports `comfyui.source` (`explicit`, `env:H3LITE_COMFYUI`, `config:<path>`, `root:<path>`, `home`, or `not-found`). If the source is not `not-found`, reuse the install and do not offer another 11-15 GB ComfyUI download. Only ask for a path when `main.py` or `models/` is missing; write the confirmed path to the config before any repair.
+
 ## Installation target and directory layout
 
 Select the target before downloading anything. The agent must show the
@@ -604,3 +639,4 @@ failure diagnosis and use `--watch` only with a bounded timeout.
 - Official ComfyUI H3 tutorial: https://docs.comfy.org/tutorials/video/minimax/minimax-h3
 - MiniMax H3 repository: https://github.com/MiniMax-AI/MiniMax-H3
 - H3 Turbo custom nodes: https://github.com/Larryvrh/ComfyUI-MiniMax-H3-Turbo
+- Blackwell/quantized H3 evidence: https://github.com/Comfy-Org/comfy-kitchen/issues/163 and https://github.com/Comfy-Org/ComfyUI/issues/17098 (cross-references #120; 0.2.38 retest and fp8-DiT workaround in #163)

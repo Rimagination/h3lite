@@ -1,0 +1,65 @@
+{
+  "name": "h3lite",
+  "version": "0.2.1",
+  "description": "DeepSeek Harness bundle for H3Lite: local MiniMax H3 video production skills plus native h3_generate / h3_status / h3_doctor / h3_list_runs tools.",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Liang Ren",
+    "url": "https://github.com/Rimagination"
+  },
+  "homepage": "https://github.com/Rimagination/h3lite",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Rimagination/h3lite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Rimagination/h3lite/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "minimax-h3",
+    "comfyui",
+    "video-generation",
+    "ref2va",
+    "blender",
+    "previz"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "h3lite-mcp": "./runtime/h3-mcp-server.cjs"
+  },
+  "files": [
+    "index.js",
+    "lib/*.mjs",
+    "scripts/*.mjs",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "runtime/**",
+    "skills/**",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "sync-skills": "node scripts/sync-skills.mjs",
+    "check-skills": "node scripts/sync-skills.mjs --check",
+    "prepack": "node scripts/sync-skills.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

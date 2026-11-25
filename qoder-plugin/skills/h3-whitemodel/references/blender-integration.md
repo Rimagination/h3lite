@@ -94,7 +94,7 @@ bpy.ops.render.render(animation=True)
      ```json
      {"mcpServers":{"blender":{"command":"uvx","args":["mcp-for-blender"]}}}
      ```
-     Qoder 侧用自定义 MCP/Connector 加入同样的 command/args；改完配置需重载客户端。
+     宿主侧用自定义 MCP/Connector 加入同样的 command/args；改完配置需重载客户端。
 - 工具（README 所述）：`execute_blender_code`、`look`、`get_scene_info`、`generate_3d`、`generate_gaussian_world`、`search_assets`、`import_asset`、`get_addon_status` 等。
 - 适合：
   - 交互 blockout、试机位、看 viewport/camera 截图；
@@ -109,7 +109,7 @@ bpy.ops.render.render(animation=True)
 
 - `execute_blender_code` 可执行任意 Python；socket **无认证、无加密**。只在本机 localhost 使用，不要暴露到公网或不可信网络。
 - 只运行一个 MCP server 实例；不要同时在多个客户端里连同一个 Blender。
-- 不运行来源不明的脚本/资产；Qoder 的权限确认不能绕过。
+- 不运行来源不明的脚本/资产；宿主的权限确认不能绕过。
 - 可用 `BLENDER_MCP_SAFE_MODE=1` 限制高风险脚本；遥测可用 `DISABLE_TELEMETRY=true` 关闭。
 - 资产下载可能阻塞 Blender 主线程（Poly Haven）或因 Cloudflare 失败（Poly Pizza）；失败不要让主流程卡死。
 

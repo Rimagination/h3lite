@@ -16,7 +16,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
-from h3_paths import normalize_windows_path
+from h3_paths import find_comfyui, normalize_windows_path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -254,6 +254,7 @@ def build_generate_command(
     last_frame: str | Path | None = None,
     reference_images: Sequence[str | Path] | None = None,
     reference_audios: Sequence[str | Path] | None = None,
+    reference_videos: Sequence[str | Path] | None = None,
     anchor_file: str | Path | None = None,
     video_vae: str | None = None,
 ) -> list[str]:
@@ -309,6 +310,8 @@ def build_generate_command(
         command.extend(["--ref-image", str(reference_image)])
     for reference_audio in reference_audios or []:
         command.extend(["--ref-audio", str(reference_audio)])
+    for reference_video in reference_videos or []:
+        command.extend(["--ref-video", str(reference_video)])
     if anchor_file is not None:
         command.extend(["--anchor-file", str(anchor_file)])
     if allow_duplicate:
@@ -508,14 +511,19 @@ def resolve_reference_mode(args: argparse.Namespace) -> str:
     has_last = bool(getattr(args, "last_frame", None))
     reference_images = list(getattr(args, "reference_images", None) or getattr(args, "ref_image", None) or [])
     reference_audios = list(getattr(args, "reference_audios", None) or getattr(args, "ref_audio", None) or [])
-    if reference_images and (has_first or has_last):
-        raise FastPathError("--ref-image cannot be combined with --first-frame or --last-frame")
+    reference_videos = list(getattr(args, "reference_videos", None) or getattr(args, "ref_video", None) or [])
+    if (reference_images or reference_videos) and (has_first or has_last):
+        raise FastPathError("--ref-image/--ref-video cannot be combined with --first-frame or --last-frame")
     if reference_audios and not reference_images:
         raise FastPathError("--ref-audio requires Ref2VA with at least one --ref-image; audio cannot be the only reference input")
+    if reference_videos and not reference_images:
+        raise FastPathError("--ref-video requires Ref2VA with at least one --ref-image; the identity image remains mandatory")
     if len(reference_audios) > 3:
         raise FastPathError("--ref-audio accepts at most 3 files (ref_audios max 3)")
+    if len(reference_videos) > 3:
+        raise FastPathError("--ref-video accepts at most 3 files (ref_videos max 3)")
     inferred = (
-        "ref2va" if reference_images
+        "ref2va" if (reference_images or reference_videos)
         else "fl2va" if has_first and has_last
         else "i2va" if has_first
         else "l2va" if has_last
@@ -795,7 +803,13 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
     monitor_gui = resolve_monitor_gui(getattr(args, "monitor_gui", None))
     reference_mode = resolve_reference_mode(args)
     reference_mode_label = REFERENCE_MODE_LABELS.get(reference_mode.lower(), reference_mode.upper())
-    comfyui = normalize_windows_path(args.comfyui).resolve()
+    comfyui, comfyui_source = find_comfyui(args.comfyui)
+    if comfyui is None:
+        raise FastPathError(
+            "ComfyUI root not found. Pass --comfyui <ComfyUI>, set H3LITE_COMFYUI, "
+            "or run h3_doctor.py --comfyui <ComfyUI> --write-config once."
+        )
+    comfyui = comfyui.resolve()
     output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else comfyui / "output"
     run_root = normalize_windows_path(args.run_root).resolve() if args.run_root else comfyui / "user" / "h3lite_runs"
     environment = run_root / "_environment"
@@ -956,6 +970,7 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
         last_frame=getattr(args, "last_frame", None),
         reference_images=getattr(args, "reference_images", None) or getattr(args, "ref_image", None),
         reference_audios=getattr(args, "reference_audios", None) or getattr(args, "ref_audio", None),
+        reference_videos=getattr(args, "reference_videos", None) or getattr(args, "ref_video", None),
         anchor_file=getattr(args, "anchor_file", None),
         video_vae=getattr(args, "video_vae", None),
     )
@@ -1032,7 +1047,10 @@ def run_fastpath(args: argparse.Namespace) -> dict[str, Any]:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--comfyui", required=True, help="absolute ComfyUI installation directory")
+    parser.add_argument(
+        "--comfyui",
+        help="absolute ComfyUI directory; defaults to H3LITE_COMFYUI, ~/.h3lite/config.json, or the current project",
+    )
     parser.add_argument("--base-url", default="http://127.0.0.1:8188", help="ComfyUI server URL")
     prompt_group = parser.add_mutually_exclusive_group(required=True)
     prompt_group.add_argument("--prompt-file", help="UTF-8 H3 prompt file")
@@ -1089,6 +1107,13 @@ def parse_args() -> argparse.Namespace:
         action="append",
         default=[],
         help="standalone voice-timbre reference for Ref2VA; repeat for Audio 1, Audio 2, Audio 3 (max 3, requires --ref-image)",
+    )
+    parser.add_argument(
+        "--ref-video",
+        dest="reference_videos",
+        action="append",
+        default=[],
+        help="motion/camera reference video for Ref2VA; repeat for Video 1..3 (max 3, requires --ref-image)",
     )
     parser.add_argument("--anchor-file", help="optional JSON declaration of identity/continuity anchors")
     parser.add_argument("--target-minutes", type=float)

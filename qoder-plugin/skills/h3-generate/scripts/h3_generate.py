@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -24,7 +25,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from h3_plan import parse_resolution
-from h3_paths import normalize_windows_path
+from h3_paths import find_comfyui, normalize_windows_path
 from h3_anchor import anchor_summary, build_anchor_sheet, write_anchor_sheet
 
 
@@ -1076,6 +1077,59 @@ def bypass_block_cache(workflow: dict[str, Any]) -> int:
     return changed
 
 
+QUANTIZED_DIT_RE = re.compile(r"(w4a8|w6a8|int8|convrot)", re.IGNORECASE)
+BLACKWELL_NAME_RE = re.compile(r"RTX\s*50\d0|B[12]00|Blackwell", re.IGNORECASE)
+
+
+def _nvidia_gpu_names() -> list[str]:
+    try:
+        completed = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=3,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return []
+    if completed.returncode != 0:
+        return []
+    return [line.strip() for line in completed.stdout.splitlines() if line.strip()]
+
+
+def blackwell_quantization_warning(workflow: dict[str, Any]) -> str | None:
+    """Warn before a Blackwell + quantized-DiT run that upstream kernels fail.
+
+    This is intentionally cheap (one nvidia-smi call) and non-blocking: the
+    failure is upstream, and only a text-influence smoke test can tell whether
+    this particular machine is affected.
+    """
+    gpu_names = [name for name in _nvidia_gpu_names() if BLACKWELL_NAME_RE.search(name)]
+    if not gpu_names:
+        return None
+    quantized: list[str] = []
+    for node in workflow.values():
+        if not isinstance(node, dict) or not isinstance(node.get("inputs"), dict):
+            continue
+        if str(node.get("class_type", "")) not in {"UNETLoader", "CheckpointLoaderSimple"}:
+            continue
+        for field in ("unet_name", "ckpt_name"):
+            value = node["inputs"].get(field)
+            if isinstance(value, str) and QUANTIZED_DIT_RE.search(Path(value).name):
+                quantized.append(Path(value).name)
+    if not quantized:
+        return None
+    return (
+        f"Blackwell GPU ({', '.join(gpu_names)}) with quantized H3 DiT ({', '.join(sorted(set(quantized)))}): "
+        "upstream comfy-kitchen reports fixed texture / text ignored on sm_120 (issue #163; ComfyUI #17098). "
+        "Run a 640x352 4-step two-prompt smoke test first. If text has no effect, switch only UNETLoader to "
+        "minimax_h3_fl2va_pruned_fp8_scaled.safetensors and keep TE/LoRA/VAE unchanged."
+    )
+
+
 def apply_profile(workflow: dict[str, Any], profile: str) -> None:
     """Apply conservative generation defaults; explicit CLI overrides win later."""
     if profile not in PROFILE_STEPS:
@@ -1623,10 +1677,15 @@ def main() -> int:
     try:
         workflow_path = normalize_windows_path(args.workflow).resolve() if args.workflow else default_workflow_path(args.workflow_template)
         workflow = load_workflow(workflow_path)
-        comfyui_path = normalize_windows_path(args.comfyui).resolve() if args.comfyui else None
+        comfyui_path, comfyui_source = find_comfyui(args.comfyui, search_roots=False)
         output_dir = normalize_windows_path(args.output_dir).resolve() if args.output_dir else None
         if comfyui_path is None and output_dir is not None and output_dir.name.lower() == "output":
             comfyui_path = output_dir.parent
+            comfyui_source = "output-dir"
+        if comfyui_path is None:
+            comfyui_path, comfyui_source = find_comfyui(None, Path.cwd())
+        if comfyui_path is not None:
+            comfyui_path = comfyui_path.resolve()
         requested_component_set = normalize_component_set(getattr(args, "component_set", "auto"))
         model_overrides = (
             resolve_model_overrides(workflow, comfyui_path, requested_component_set)
@@ -1634,6 +1693,12 @@ def main() -> int:
             else {}
         )
         selected_component_set = model_overrides.get("component_set")
+        runtime_warnings: list[str] = []
+        blackwell_warning = blackwell_quantization_warning(workflow)
+        if blackwell_warning:
+            runtime_warnings.append(blackwell_warning)
+            if not args.json:
+                print("WARNING: " + blackwell_warning, file=sys.stderr)
         component_integrity = None
         if selected_component_set and comfyui_path is not None:
             component_integrity = verify_component_integrity(comfyui_path, selected_component_set)
@@ -1689,6 +1754,8 @@ def main() -> int:
                 "effective_settings": effective_workflow_settings(workflow),
                 "component_set": selected_component_set,
                 "model_overrides": model_overrides,
+                "comfyui_source": comfyui_source,
+                "runtime_warnings": runtime_warnings,
                 "workflow": workflow,
             }
             print(json.dumps(result, ensure_ascii=False, indent=2))

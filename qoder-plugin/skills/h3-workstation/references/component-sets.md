@@ -130,6 +130,18 @@ Unchanged from Set B: `minimax_h3_fl2va_pruned_w4a8_mixed.safetensors`
 (FL2VA routes), `qwen3vl_4b_fp8_scaled.safetensors`,
 `mmh3-4b-ClipProj-celeb-mlp.safetensors`, `minimax_h3_audio_vae_fp32.safetensors`.
 
+**RTX 50-series caveat (2026-11-25):** Set C is validated on the RTX 4060 Ti
+16 GB (Ada, sm_89), not on Blackwell (sm_120). Upstream reports on RTX 5060 Ti
+16 GB show W4A8/INT8 convrot H3 graphs running without errors but ignoring text
+and emitting a fixed texture; comfy-kitchen 0.2.38 did not fix it, and an RTX
+5090 did not reproduce it. The W4A8 bases above are therefore **unvalidated on
+sm_120**. Run a two-prompt 640x352/4-step text-influence test before a final
+render; if text has no effect, switch only the DiT to
+`minimax_h3_fl2va_pruned_fp8_scaled.safetensors` and keep TE/ClipProj/LoRA/VAE
+unchanged. Do not use the Sol fp16 VAE as the fix for this symptom; that is the
+separate 128px seam issue. The doctor/preflight/generator now surface this risk
+as `blackwell_quantized`. See `deployment-matrix.md` for links and procedure.
+
 ### Set C asset package (2026-11-25, Quark)
 
 - Share: <https://pan.quark.cn/s/6f8f5ce9f8a6> (permanent; 43 entries, 13.4 GB)

@@ -1,0 +1,8 @@
+# H3Lite bundle: one row registers six skills and four native tools.
+# Turn tools off for a skills-only install: tools: false
+- insert:
+    - id: h3lite
+      name: h3lite
+      config:
+        tools: true
+        skills: true

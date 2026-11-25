@@ -1,0 +1,6 @@
+{
+  "comfyui": "E:/MiniMax-H3/ComfyUI",
+  "output_dir": "E:/MiniMax-H3/ComfyUI/output",
+  "run_root": "E:/MiniMax-H3/ComfyUI/user/h3lite_runs",
+  "base_url": "http://127.0.0.1:8188"
+}
