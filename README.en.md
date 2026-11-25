@@ -54,6 +54,8 @@
   </tr>
 </table>
 
+<p align="center"><a href="https://rimagination.github.io/h3lite/">More Qoder clips and Set A route comparisons →</a></p>
+
 ## Hand it to an agent in one minute
 
 Send the repository link to any agent (Codex, Claude Code, WorkBuddy, Qoder, DSH or ZCode):

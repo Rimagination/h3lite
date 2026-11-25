@@ -77,7 +77,7 @@
   <main>
     <header>
       <h1>H3 Lite · 作品展示</h1>
-      <p class="intro">同一提示词、同一 Set A 组件和同一 4 步 LightX2V LoRA，对比兼容路线与四个单独加速节点组合。这组结果只作为可运行下限和路线对照，调高分辨率、采样步数或 LoRA 强度后，画质仍可继续提升。</p>
+      <p class="intro">H3 Lite 在 Qoder 等 Agent 工作流中生成的部分短片，以及红球滚动场景的 Set A 路线对比。网页播放为 960p 轻量预览，保留原生音频；源片仍保留原始生成分辨率。</p>
     </header>
 
     <section id="player-section" class="section" hidden>
@@ -97,7 +97,12 @@
 
     <section id="gallery-section" class="section">
       <section>
-        <h2>H3 Lite 生成案例</h2>
+        <h2>Qoder 短片案例</h2>
+        <p class="intro">以下短片由 H3 Lite 在 Qoder 会话中生成，覆盖横屏、竖屏、动作、对白与角色连续性。</p>
+        <div id="qoder-gallery" class="gallery"></div>
+      </section>
+      <section class="section">
+        <h2>H3 Lite 基础案例</h2>
         <div id="example-gallery" class="gallery"></div>
       </section>
       <section class="section">
@@ -146,6 +151,48 @@
         note: "I2VA · 原创美式成人动画场景",
         video: "case-familyguy.mp4",
         poster: "case-familyguy.png"
+      }
+    ];
+    const qoderEntries = [
+      {
+        key: "qoder-jojo-rain-walk",
+        title: "雨夜独行 · 红围巾",
+        meta: "1344×768 生成 · 10 秒 · 原生音频",
+        note: "T2VA · 雨夜城市、角色出场与运镜",
+        video: "qoder-jojo-rain-walk.mp4",
+        poster: "qoder-jojo-rain-walk.jpg"
+      },
+      {
+        key: "qoder-jojo-duel-dialogue",
+        title: "雨夜对决 · 日语台词",
+        meta: "1344×768 生成 · 15 秒 · 原生对白",
+        note: "T2VA · 双角色动作、命中与新劣势",
+        video: "qoder-jojo-duel-dialogue.mp4",
+        poster: "qoder-jojo-duel-dialogue.jpg"
+      },
+      {
+        key: "qoder-jojo-coin-monologue",
+        title: "断罪硬币 · 竖屏独白",
+        meta: "768×1344 生成 · 10 秒 · 原生音频",
+        note: "T2VA · 竖屏构图与角色特写",
+        video: "qoder-jojo-coin-monologue.mp4",
+        poster: "qoder-jojo-coin-monologue.jpg"
+      },
+      {
+        key: "qoder-jojo-gasstation",
+        title: "正午加油站 · 高频战斗",
+        meta: "768×1344 生成 · 10 秒 · 原生音频",
+        note: "T2VA · 动作事件密度与命中停顿",
+        video: "qoder-jojo-gasstation.mp4",
+        poster: "qoder-jojo-gasstation.jpg"
+      },
+      {
+        key: "qoder-deepseek-window",
+        title: "窗边星球 · 角色连续",
+        meta: "1344×768 生成 · 15 秒 · 原生日语",
+        note: "T2VA · 同一角色从床沿走到窗边",
+        video: "qoder-deepseek-window.mp4",
+        poster: "qoder-deepseek-window.jpg"
       }
     ];
     const referenceEntries = [
@@ -208,9 +255,10 @@
         poster: "seta-lightx2v-all-accel.jpg"
       }
     ];
-    const entries = [...exampleEntries, ...referenceEntries, ...routeEntries];
+    const entries = [...qoderEntries, ...exampleEntries, ...referenceEntries, ...routeEntries];
 
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const qoderGallery = document.querySelector("#qoder-gallery");
     const exampleGallery = document.querySelector("#example-gallery");
     const referenceGallery = document.querySelector("#reference-gallery");
     const routeGallery = document.querySelector("#route-gallery");
@@ -246,6 +294,7 @@
       video.addEventListener("error", () => { playerError.hidden = false; }, { once: true });
     }
 
+    renderGallery(qoderGallery, qoderEntries);
     renderGallery(exampleGallery, exampleEntries);
     renderGallery(referenceGallery, referenceEntries);
     renderGallery(routeGallery, routeEntries);
