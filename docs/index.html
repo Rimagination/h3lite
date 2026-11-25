@@ -98,6 +98,15 @@
 
     <section id="gallery-section" class="section">
       <section>
+        <h2>H3 Lite 基础示例</h2>
+        <div id="example-gallery" class="gallery"></div>
+      </section>
+      <section class="section">
+        <h2>使用 Blender 建模和参考生视频</h2>
+        <p class="intro">先用 Blender 白模确定走位、相机与节奏，再把白模视频作为 Ref2VA 运动参考，生成上下对比的最终画面。</p>
+        <div id="blender-gallery" class="gallery gallery-featured"></div>
+      </section>
+      <section class="section">
         <h2>ZCode 示例</h2>
         <p class="intro">由 H3 Lite 在 ZCode 会话中生成：参考图作为首帧，两人对视后缓慢收势，头发与衣领轻微风动。</p>
         <div id="zcode-gallery" class="gallery gallery-featured"></div>
@@ -106,10 +115,6 @@
         <h2>Qoder 示例</h2>
         <p class="intro">以下示例由 H3 Lite 在 Qoder 会话中生成，覆盖横屏、竖屏、动作、对白与角色连续性。</p>
         <div id="qoder-gallery" class="gallery"></div>
-      </section>
-      <section class="section">
-        <h2>H3 Lite 基础示例</h2>
-        <div id="example-gallery" class="gallery"></div>
       </section>
       <section class="section">
         <h2>Ref2VA 参考素材</h2>
@@ -167,12 +172,14 @@
         note: "I2VA · 参考图首帧、对视、抬手收势",
         video: "zcode-jojo-faceoff.mp4",
         poster: "zcode-jojo-faceoff.jpg"
-      },
+      }
+    ];
+    const blenderEntries = [
       {
         key: "zcode-blender-unicorn-compare",
-        title: "使用 Blender 建模和参考生视频",
+        title: "独角兽玩偶 · 广播体操 360° 环绕",
         meta: "1344×1536 · 10.8 秒 · 原生音频",
-        note: "白模 / H3 上下对比 · 360° 环绕",
+        note: "Blender 白模 / H3 上下对比，白模作为运动参考",
         video: "zcode-blender-unicorn-compare.mp4",
         poster: "zcode-blender-unicorn-compare.jpg"
       }
@@ -279,9 +286,10 @@
         poster: "seta-lightx2v-all-accel.jpg"
       }
     ];
-    const entries = [...zcodeEntries, ...qoderEntries, ...exampleEntries, ...referenceEntries, ...routeEntries];
+    const entries = [...exampleEntries, ...blenderEntries, ...zcodeEntries, ...qoderEntries, ...referenceEntries, ...routeEntries];
 
     const entryByKey = new Map(entries.map((entry) => [entry.key, entry]));
+    const blenderGallery = document.querySelector("#blender-gallery");
     const zcodeGallery = document.querySelector("#zcode-gallery");
     const qoderGallery = document.querySelector("#qoder-gallery");
     const exampleGallery = document.querySelector("#example-gallery");
@@ -319,9 +327,10 @@
       video.addEventListener("error", () => { playerError.hidden = false; }, { once: true });
     }
 
+    renderGallery(exampleGallery, exampleEntries);
+    renderGallery(blenderGallery, blenderEntries);
     renderGallery(zcodeGallery, zcodeEntries);
     renderGallery(qoderGallery, qoderEntries);
-    renderGallery(exampleGallery, exampleEntries);
     renderGallery(referenceGallery, referenceEntries);
     renderGallery(routeGallery, routeEntries);
     const requested = new URLSearchParams(location.search).get("video");
