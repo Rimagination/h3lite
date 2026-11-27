@@ -7,7 +7,9 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const pluginRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const sourceRoot = resolve(pluginRoot, '..', 'skills')
+const canonicalRoot = resolve(pluginRoot, '..', 'qoder-plugin', 'skills')
+const legacyRoot = resolve(pluginRoot, '..', 'skills')
+const sourceRoot = existsSync(canonicalRoot) ? canonicalRoot : legacyRoot
 const targetRoot = join(pluginRoot, 'skills')
 const check = process.argv.includes('--check')
 

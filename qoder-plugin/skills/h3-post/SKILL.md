@@ -132,6 +132,14 @@ FaceRefine / 贴回式修脸只在用户明确要求、单镜、且问题只是�
 - 正确生脸不要叠 FlowLock/freq_sep；它们可能把正确五官拉回错误几何。
 - 用户否决脸就停，不要继续调 mask/feather 试图“修对”。
 
+## 分级验收
+
+- 技术 PASS、低清身份 PASS、生产分辨率可见内容 PASS 是不同等级，不能互相外推。
+- 没拍到的角度必须标为 `not exercised`；例如角色始终背向/侧向时，正脸和眼镜细节不算验收通过。
+- grid 检查的 `residual` 不能改写成 `clean`；低于阈值且叠加图无可见网格时，按实际 residual 记录。
+- 双角色复刻的验收证据至少包括完整解码、source/guide/map/output 接触表、A/B crop、转身/停步段、尾段持续双人、全分辨率关键帧和 changed-node 报告。
+- 诊断片即使达到生产画布，也不能替代最终整片原音轨组装、连续性和交付 QA。
+
 ## QA
 
 交付前逐项：
@@ -143,8 +151,9 @@ FaceRefine / 贴回式修脸只在用户明确要求、单镜、且问题只是�
 5. 响度与真峰值达标，对白可懂；带台词的另跑声音一致性审计（同一角色跨镜 F0 中位数极差 ≤2 个半音、同场角色间距 ≥3 个半音）；
 6. 单次多镜/拼接片：报告实际视觉段数与切点；确认整条只做了一次 loudnorm；
 7. 动作片：报告主要事件数、近静止比例、是否有 >0.5 秒定格；确认没有用变速/插帧掩盖慢动作；
-8. 固定网格/接缝：跑 `scripts/h3_grid_check.py --video <mp4> --comfyui <ComfyUI> --json`；`suspected` 时按 `component-sets.md` 做 fp16 VAE 单变量 A/B，不用模糊/降噪遮盖；
-9. 整片从头到尾看一遍——技术指标合格不等于内容可用。
+8. 固定网格/接缝：跑 `scripts/h3_grid_check.py --video <mp4> --comfyui <ComfyUI> --json`；`suspected` 时按 `component-sets.md` 做 fp16 VAE 单变量 A/B，不用模糊/降噪遮盖；`residual` 按实际记录，不升级成 clean；
+9. 双角色/角色替换：确认身份与配饰隔离、双人持续可见、guide/map 无残留、原演员身份无泄漏；未出现的角度标 `not exercised`；
+10. 整片从头到尾看一遍——技术指标合格不等于内容可用。
 
 任何一项失败：报告具体失败项与已完成部分，不把它标记为完成视频。
 
@@ -161,6 +170,7 @@ FaceRefine / 贴回式修脸只在用户明确要求、单镜、且问题只是�
 - `scripts/h3_voice_audit.py`：按角色窗口测 F0/质心/周期性/RMS，输出半音差与门限判定。
 - `scripts/h3_grid_check.py`：原生分辨率测 128px 固定网格/接缝，输出 profile、overlay、JSON 与 clean/residual/suspected 判定。
 - [`../h3-prompt/references/voice-consistency.md`](../h3-prompt/references/voice-consistency.md)：声音一致性方法、选角声学距离、已知坑与修正边界。
+- [`../h3-generate/references/dual-character-remake.md`](../h3-generate/references/dual-character-remake.md)：双角色复刻的分级验收、接触表/crop、未 exercised 角度与生产画布边界。
 
 ## 来源
 

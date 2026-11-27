@@ -1,6 +1,6 @@
 ---
 name: h3-generate
-description: 在本机 ComfyUI 上提交 MiniMax H3 生成任务（T2VA/I2VA/FL2VA/Ref2VA），选择路线与分辨率，绑定参考图与参考音频（--ref-image / --ref-audio）做身份与音色参考，监控进度并验证输出。当用户要求渲染、重跑、查看进度、批量生成或接音色参考时使用。
+description: 在本机 ComfyUI 上提交 MiniMax H3 生成任务（T2VA/I2VA/FL2VA/Ref2VA），选择路线与分辨率，绑定参考图与参考音频做身份与音色参考；支持双角色 Preprocessor Map + Regional 复刻，监控进度并验证输出。当用户要求渲染、重跑、查看进度、批量生成、角色替换或接音色参考时使用。
 ---
 
 # H3 生成：热路径
@@ -67,6 +67,7 @@ fastpath 复用医生缓存、内联规划/预检、提交、一次有界 watch�
 | 禁止 | 481 | — | 本机曾 48 W 自旋死锁，必须重启服务 |
 
 - 24 fps，低显存基线 640x352、4 步、`res_multistep` + `simple`。
+- H3 合法帧数满足 `n % 17 == 5`；107 帧、56 帧等诊断段按真实帧数记录，不硬裁成整秒。
 - 0.4 MP 官方风画布（16:9 → 864x480）只在 planner 批准或用户明确要求时用。
 - 32 像素对齐是 VAE 16 像素空间降采样与 DiT 2 像素 patch 的共同约束；不要承诺“720p”等消费标签，报告真实画布。
 - 帧数校验允许向上最多 16 帧（约 8%）的自然补帧；短于请求超过 2 帧仍判失败。244→260 是正常补帧，状态应报 success。
@@ -140,6 +141,24 @@ python scripts/h3_generate.py `
 - 提示词写清视频参考只负责动作、走位、相机和接触点，不复制灰模材质/球关节/场景；身份绑定原图。
 - `--ref-video` 只对 `MiniMaxH3ReferenceToVideo` 工作流有效；I2VA/FL2VA 会拒绝。
 - `--dry-run` 可看自动新增的 LoadVideo/GetVideoComponents 节点。
+
+## 双角色复刻（Preprocessor Map + Regional）
+
+保留原片场景、机位和表演轨迹并替换两位角色时，使用 Character Swap Preprocessor Map + DWPose + SAM subject map + `BFSH3RegionalReferenceAttention`，不要套用单角色 `body_swap`。
+
+- 默认 Subject 1/红/Picture 1、Subject 2/蓝/Picture 2；实际绑定以工作流和提示词为准。
+- subject map 必须使用 BFSNodes 精确 hybrid 色 `(235,40,40)` / `(35,110,235)`，重采样用 nearest-neighbor。
+- 后段 mask 消失不等于失败；逐帧比较接受源与候选的检测色序列，双人持续可见由 prompt + Regional propagation 保证。
+- soft bias 必须同时接 `guide` 与 `subject_map`；日志应出现 `routing: soft` 和 `tracked 2 subjects`。
+- 从已验收图克隆，只允许修改输入文件、输出几何和文件名节点；用脚本验证 changed nodes、图连接、几何和引用 SHA。
+- 分辨率按内容 → 显存 → 生产画布顺序升级；每次只改几何，保留 prompt、参考、seed、采样和 Regional 参数。
+
+```bash
+python scripts/h3_validate_subject_map.py --map map.mp4 --reference accepted_map.mp4 --guide guide.mp4 --allowed-colors 0,1 --json qa/map.json
+python scripts/h3_prepare_regional_workflow.py --base accepted.json --plan regional_plan.json --output candidate.json --report qa/workflow.json
+```
+
+完整合同、plan schema、颜色门禁和验收证据见 [`references/dual-character-remake.md`](references/dual-character-remake.md)。显存优化与 allocator 警告分类见 [`../h3-workstation/references/regional-attention-memory.md`](../h3-workstation/references/regional-attention-memory.md)。
 
 ## 文戏单次多镜（10 秒 3–4 拍）
 
@@ -247,7 +266,8 @@ python scripts/h3_showrunner.py --spec projects/ep04/show.json `
 5. 身份、服装、道具、参考构图等验收条件在抽帧中保持一致；带台词的另**听**说话人是否正确、台词是否只说一次、音色是否与正典样本一致（跨镜漂移交给 `h3-post` 的 `scripts/h3_voice_audit.py` 量化，不要凭"有音频流"判过）；
 6. 单次多镜只核对请求切点附近（±0.5 s），不做全片阈值扫；请求切点变成连续运镜但仍有清楚新景别/机位，按 3–4 个视觉段验收；
 7. 记录输出路径、实际耗时、配置指纹与 run manifest；动作片另记实际事件数、近静止比例、是否用了两段采样/LoRA；
-8. 计划估计与实际执行时间对比；低显存首次运行可能因内核编译慢很多，这是经验值不是承诺。
+8. 双角色复刻额外记录 subject-map 颜色序列、Regional 接线日志、changed-node 报告、A/B crop、持续双人可见和未 exercised 的角度；
+9. 计划估计与实际执行时间对比；低显存首次运行可能因内核编译慢很多，这是经验值不是承诺。
 
 `ffprobe_not_found` 只说明验证器路径缺失：保留已生成文件，设置 `H3LITE_FFPROBE` 或在 `<ComfyUI>` 附近找 `ffprobe.exe`；不要因为元数据不可读就重跑模型。动态 QA 用的 `ffmpeg` 同理，可设 `H3LITE_FFMPEG`；脚本也会在 `<ComfyUI>` 根目录与 `ffmpeg/bin`、`tools/ffmpeg/bin` 下查找，不要把“找不到 ffmpeg”当成视频失败。
 
@@ -282,5 +302,8 @@ python scripts/h3_showrunner.py --spec projects/ep04/show.json `
 - `assets/show.example.json`、`assets/canon.example.json`：可直接复制修改的 spec 模板。
 - `references/face-quality.md`：人像路线 A/B 与护栏。
 - `references/final-lite-canvas.md`：1184×672 / 1152×640 中间画布的三臂 A/B 协议、验收与磁盘边界；未验证前不进 auto 路由。
+- `references/dual-character-remake.md`：Preprocessor Map + Regional 双角色复刻、hybrid 色合同、工作流最小变更、分辨率阶梯与分级验收。
+- `scripts/h3_validate_subject_map.py`：逐帧校验 BFSNodes hybrid 色与接受源颜色序列。
+- `scripts/h3_prepare_regional_workflow.py`：按 plan 克隆工作流并验证 changed nodes、连接、几何和引用 SHA。
 - [`../h3-prompt/references/voice-consistency.md`](../h3-prompt/references/voice-consistency.md)：声音圣经、选角声学距离、参考音频上限与已知坑（#95 / #16289）、验收门限。
 - [`../h3-director/references/action-combat.md`](../h3-director/references/action-combat.md)：动作密度、5 秒单元、慢放诊断、动作 LoRA 兼容性与测试阶梯。

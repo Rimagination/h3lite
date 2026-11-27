@@ -1,6 +1,6 @@
 ---
 name: h3-workstation
-description: 安装、迁移、体检、修复本机 MiniMax H3 / ComfyUI 环境；选择组件集、解决显存与页面文件问题、清理运行记录。当用户提到装 H3、ComfyUI 起不来、换显卡、生成变慢、磁盘或显存清理时使用。
+description: 安装、迁移、体检、修复本机 MiniMax H3 / ComfyUI 环境；选择组件集、解决显存与页面文件问题、诊断 Regional Attention 内存与 allocator 警告、清理运行记录。当用户提到装 H3、ComfyUI 起不来、换显卡、生成变慢、磁盘或显存清理时使用。
 ---
 
 # H3 工作站：安装、体检、修复与维护
@@ -154,6 +154,17 @@ python scripts/h3_preflight.py --doctor-json "$environment\doctor.json" `
 - 脆弱提交前用 `python scripts/h3_vram.py --check-free-gb 5` 做门禁。
 - 案例与诊断见 `references/gpu-contention.md`。
 
+### Regional Attention 显存路线
+
+- `--reserve-vram 3.0` 是本机 Regional 双角色路线当前唯一材料级优化；1.5 和 `output_scale=0.92` 不能实质降低采样峰值。
+- `bias_start/bias_end=24` 只提速，不构成显存安全证据。
+- 原生 H3 `VAEDecodeTiled` 忽略真正分块参数；不要把它写成通用显存解决方案。`--cpu-vae` 也不降低采样激活。
+- 跨运行比较使用 `nvidia_used_peak_mib`，并按 execution 时间窗统计最低空闲、RAM、功耗和 elapsed reset。
+- 单次 allocator OOM 警告不是终态失败；必须结合同一 prompt 的队列、GPU 活性、采样进度、execution_success 和最终产物分类。恢复后完成 8/8、decode、SaveVideo 的警告记为 recovered，不重复提交。
+- Regional override 与 Native Temporal 明确冲突；Sol/block-sparse kernel 会绕过 Regional routing，ContextWindows 也不是安全组合。
+
+实测阶梯、测量字段和失败分类见 [`references/regional-attention-memory.md`](references/regional-attention-memory.md)。
+
 ## 5. 缓存与维护
 
 - 医生报告缓存于 `<ComfyUI>/user/h3lite_runs/_environment/`，正常会话 30 分钟内复用；ComfyUI/模型/节点/驱动变化或失败后失效；波动资源用 `h3_preflight.py --refresh-runtime`。
@@ -171,6 +182,7 @@ python scripts/h3_preflight.py --doctor-json "$environment\doctor.json" `
 - `references/deployment-matrix.md`：低显存档、官方回退档、模型目录、节点角色、启动参数（含 Set C）、16 GB 加速阶梯与故障排序。
 - `references/component-sets.md`：Set A/B/C 的精确文件、大小、运行 ABI 与下载完整性规则。
 - `references/gpu-contention.md`：WDDM 显存争用、每进程读数、处理顺序与实测案例。
+- `references/regional-attention-memory.md`：Regional soft bias 的有效/无效优化、原生 VAE 分块边界、allocator OOM 分类与分辨率显存阶梯。
 - `references/cache-and-qa-reuse.md`：doctor/preflight/QA 的缓存 key、TTL、失效条件与不该缓存的状态。
 - `scripts/h3_doctor.py`、`h3_plan.py`、`h3_preflight.py`、`h3_cleanup.py`、`h3_vram.py`、`h3_paths.py`、`h3_setc_assets.py`、`h3_cache.py`。
 - `scripts/h3_setc_assets.py`：校验 Set C 四个模型与包结构，生成 `component_manifest.json`。

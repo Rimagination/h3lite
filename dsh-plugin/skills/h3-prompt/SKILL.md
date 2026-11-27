@@ -1,6 +1,6 @@
 ---
 name: h3-prompt
-description: 撰写、改写、诊断 MiniMax H3 提示词（基础模式三字段 T2VA/I2VA/FL2VA，Ref2VA 六字段）；应用身份-运动分离、场面调度、构图布光、情绪拆解、完成态、正向约束与防漂移措辞；处理人物声音一致性（VOICE 块、说话人 ID、选角声学距离、参考音频绑定）。当用户要求写提示词、改提示词、分析人物/动作失真，或反映角色声音不一致、音色漂移、两个角色声音合并时使用。
+description: 撰写、改写、诊断 MiniMax H3 提示词（基础模式三字段 T2VA/I2VA/FL2VA，Ref2VA 六字段）；应用身份-运动分离、双角色 Preprocessor Map 绑定、场面调度、构图布光、情绪拆解、完成态、正向约束与防漂移措辞；处理人物声音一致性。当用户要求写提示词、改提示词、分析人物/动作失真、角色替换或声音不一致时使用。
 ---
 
 # H3 提示词：写法与诊断
@@ -187,6 +187,20 @@ Every recoil flows directly into the next attack; the exchange stays at full rea
 - W4A8 路线不要写 `natural skin texture / freckles / stubble`，会变砂纸。用 `smooth refined skin, fine delicate pores, soft highlight roll-off`，避免 `heavy grain / waxy plastic / oily sheen`。
 - 社区逐帧换脸/修复器（FaceDetailer、CodeFormer/GFPGAN）不作为默认后处理：会闪烁、加显存、改变身份。
 
+## 双角色替换提示词
+
+使用 Preprocessor Map + Regional 时，提示词必须把“颜色轨道、Picture 身份、运动职责、最终可见性”分开写：
+
+- `<Subject 1>` 对应红骨架和 `<Picture 1>`，`<Subject 2>` 对应蓝骨架和 `<Picture 2>`；以实际工作流绑定为准。
+- 骨架颜色只表示姿态/表情/口型轨道，不表示目标服装颜色。
+- 每个 subject 只继承自己 Picture 的脸、发型、体型、服装和配饰；禁止跨人物转移。
+- 即使后段 subject map 消失，也要写明两位主角从首帧到尾帧持续可见、各自站位和最终构图。
+- 明确 source performer face、historical hairstyle/costume 不进入目标 cast，背景群众保持匿名。
+- 用可见动作表达情绪，不用“僵住/害怕”等空话；遗憾通过站位、视线、未完成的靠近和负空间成立。
+- TARA 路线不要靠继续提高 `structure_guidance` 解决可读行走；没有连续抽帧改善就停止调参。
+
+完整合同、颜色序列与验收边界见 [`../h3-generate/references/dual-character-remake.md`](../h3-generate/references/dual-character-remake.md)。
+
 ## 提交前检查
 
 对照 `references/failure-modes.md` 过一遍：filler-babble、动作截断、假操作、多手、滑步、多运镜、跨镜身份漂移、打戏拼接、打斗慢放/定格、情绪空泛、整帧糊化、跨镜音色漂移、同性别说话人合并、参考音频串台词、A→B→A 错人。动作戏另查事件密度、因果链、实时速度、是否误用多锚点、是否把台词塞进交手。带台词的另过 `references/voice-consistency.md` 的 8 问。检查结果附在输出里：
@@ -212,6 +226,7 @@ Risks: <仍存在的具体风险>
 - `references/voice-consistency.md`：声音圣经、选角声学距离、VOICE 块、官方 `<Audio N>` 绑定、时长/轮次预算、已知坑与验收门限。
 - [`../h3-generate/references/show-contract.md`](../h3-generate/references/show-contract.md)：开拍前合同、镜头卡字段与 show 校验门禁。
 - [`../h3-director/references/action-combat.md`](../h3-director/references/action-combat.md)：动作密度、因果链、实时速度、动作路线与慢放诊断。
+- [`../h3-generate/references/dual-character-remake.md`](../h3-generate/references/dual-character-remake.md)：双角色 Preprocessor Map 的 Subject/Picture/颜色绑定、后段 mask 丢失与持续双人可见合同。
 
 ## 来源
 
